@@ -1,0 +1,19 @@
+{
+  "name": "foothub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FootHub - live football scores, fixtures and standings backed by SQLite",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node server/seed.js",
+    "reset": "node server/seed.js --reset"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  }
+}

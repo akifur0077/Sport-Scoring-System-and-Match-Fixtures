@@ -1,0 +1,52 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { DatabaseSync } = require('node:sqlite');
+
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'foothub.db');
+const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
+const db = new DatabaseSync(DB_PATH);
+
+db.exec('PRAGMA journal_mode = WAL;');
+db.exec('PRAGMA foreign_keys = ON;');
+db.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
+
+/** Column names of a table (table names here are code constants, never user input). */
+function columnsOf(table) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+}
+
+/** Upgrade databases created by older versions of this project. */
+function migrate() {
+  if (!columnsOf('users').includes('role')) {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+  }
+
+  if (!columnsOf('matches').includes('created_by')) {
+    db.exec('ALTER TABLE matches ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+  }
+
+  const hasLegacyGoals = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'goals'"
+  ).get();
+
+  if (hasLegacyGoals) {
+    db.exec(`
+      INSERT INTO match_events (match_id, team_id, player_name, type, minute)
+      SELECT match_id, team_id, scorer_name, 'goal', minute FROM goals
+    `);
+    db.exec('DROP TABLE goals');
+  }
+}
+
+migrate();
+
+// Created after migration so older databases have the column first.
+db.exec('CREATE INDEX IF NOT EXISTS idx_matches_owner ON matches(created_by)');
+
+module.exports = db;
+module.exports.DB_PATH = DB_PATH;
