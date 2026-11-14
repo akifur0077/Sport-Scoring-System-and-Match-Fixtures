@@ -64,6 +64,12 @@ to admin on startup.
 - **Admin Panel button** — visible only to a logged-in admin; shows totals and a list of every
   registered user (name, email, role, join date, number of matches). Click **View matches** to
   see that user's fixtures across all leagues, open one, or delete it.
+- **Delete Account button** — visible to non-admin users; asks for the password, then permanently
+  deletes the account and all matches it created. The admin account cannot be deleted.
+
+In the match detail modal, the **Lineup** tab lists player names and positions only. A
+**Performance** tab is available for **live** and **finished** matches and shows each player's
+rating badge (green = 8.5+, yellow-green = 7.8+, grey = below) together with their stat line.
 
 Official (seeded) matches have `matches.created_by = NULL`, cannot be edited and cannot be
 deleted. A match must not be `finished` while adding/removing events; reopen it first.
@@ -123,6 +129,7 @@ columns are added, and a legacy `goals` table is migrated into `match_events`).
 | POST   | `/api/auth/login`                    | —      | `{ email, password }` → token                    |
 | GET    | `/api/auth/me`                       | user   | Current user (`Authorization: Bearer <token>`)    |
 | POST   | `/api/auth/logout`                   | —      | Invalidate the current token                     |
+| DELETE | `/api/auth/me`                       | user   | `{ password }` → delete own account + its matches |
 
 "owner" means the user who created the match (admins may also act on it). Official matches
 return `403` for event/status edits, and only admins can delete a custom match.
@@ -156,3 +163,7 @@ from their goal events whenever a goal is added or removed.
 ৭. লগইন করা যেকোনো ইউজার প্রতিটি লিগে (La Liga, Premier League, Champions League,
    Bundesliga, Serie A, Ligue 1, World Cup) নিজের ম্যাচ তৈরি করতে পারে এবং সেই ম্যাচে গোল,
    হলুদ ও লাল কার্ড (খেলোয়াড়ের নাম ও মিনিটসহ) যোগ/মুছে ফেলতে পারে।
+৮. যেকোনো ইউজার চাইলে **Delete Account** বাটনে ক্লিক করে পাসওয়ার্ড দিয়ে নিজের অ্যাকাউন্ট
+   এবং নিজের বানানো সব ম্যাচ মুছে ফেলতে পারে (অ্যাডমিন অ্যাকাউন্ট মোছা যাবে না)।
+৯. ম্যাচ ডিটেইলে **Lineup** ট্যাবে শুধু খেলোয়াড়ের নাম ও পজিশন থাকে। **Live** ও **Finished**
+   ম্যাচে অতিরিক্ত **Performance** ট্যাব আসে, যেখানে প্রতিটি খেলোয়াড়ের রেটিং ব্যাজ দেখা যায়।

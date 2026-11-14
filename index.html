@@ -130,6 +130,12 @@
     }
     .auth-btn:hover { border-color: var(--sub); background: var(--card-hover); }
     .auth-btn.primary { background: var(--accent-la); border-color: var(--accent-la); color: #fff; }
+    .auth-btn.danger {
+      border-color: rgba(239,68,68,0.45);
+      background: rgba(239,68,68,0.1);
+      color: #f87171;
+    }
+    .auth-btn.danger:hover { background: rgba(239,68,68,0.2); border-color: #ef4444; }
 
     /* ── VIEW SWITCHER ───────────────────────────── */
     .nav-views {
@@ -800,6 +806,7 @@
       <button class="match-tab-btn active" onclick="switchMatchTab('overview')">Overview</button>
       <button class="match-tab-btn" onclick="switchMatchTab('timeline')">Timeline</button>
       <button class="match-tab-btn" onclick="switchMatchTab('lineup')">Lineup</button>
+      <button class="match-tab-btn" id="performanceTabBtn" onclick="switchMatchTab('performance')" style="display:none">Performance</button>
       <button class="match-tab-btn" onclick="switchMatchTab('stats')">Stats</button>
     </div>
     <div class="modal-body" id="modalBodyContent" style="min-height: 420px;"></div>
@@ -814,6 +821,19 @@
       <div id="authModalTitle" style="text-align:center; font-weight:700; font-size:18px;">Login to FootHub</div>
     </div>
     <div class="modal-body" id="authModalBody"></div>
+  </div>
+</div>
+
+<!-- DELETE ACCOUNT MODAL -->
+<div class="modal-backdrop" id="deleteAccountModal" onclick="closeDeleteAccountOnBackdrop(event)">
+  <div class="modal-container">
+    <div class="modal-header">
+      <button class="modal-close-btn" onclick="closeDeleteAccount()"><i class="fa-solid fa-xmark"></i></button>
+      <div style="text-align:center; font-weight:700; font-size:18px; color:#f87171;">
+        <i class="fa-solid fa-triangle-exclamation"></i> Delete Account
+      </div>
+    </div>
+    <div class="modal-body" id="deleteAccountBody"></div>
   </div>
 </div>
 

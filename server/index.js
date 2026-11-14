@@ -767,6 +767,32 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+/** A logged-in user closes their own account; their matches go with it. */
+app.delete('/api/auth/me', requireAuth, (req, res) => {
+  const password = String(req.body?.password || '');
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    return res.status(400).json({ error: 'Password is incorrect.' });
+  }
+  if (user.role === 'admin') {
+    return res.status(400).json({ error: 'The admin account cannot be deleted.' });
+  }
+
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM matches WHERE created_by = ?').run(user.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  res.json({ ok: true });
+});
+
 /* ══════════════════════════════════════════════════════════════════
    Static frontend + error handling
    ══════════════════════════════════════════════════════════════════ */

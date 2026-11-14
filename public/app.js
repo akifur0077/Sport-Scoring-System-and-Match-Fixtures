@@ -353,6 +353,7 @@ async function openModal(id) {
 
   document.querySelectorAll('.match-tab-btn').forEach((btn, idx) =>
     btn.classList.toggle('active', idx === 0));
+  document.getElementById('performanceTabBtn').style.display = 'none';
 
   document.getElementById('modalContentHeader').textContent = 'Match details';
   document.getElementById('modalBodyContent').innerHTML = loadingBlock('Loading lineups and stats…');
@@ -362,6 +363,8 @@ async function openModal(id) {
     const { match } = await api(`/matches/${id}`);
     if (state.activeMatchId !== id) return;
     state.activeMatch = match;
+    document.getElementById('performanceTabBtn').style.display =
+      match.status === 'live' || match.status === 'finished' ? '' : 'none';
     renderModalContent();
   } catch (error) {
     document.getElementById('modalBodyContent').innerHTML = errorBlock(error.message);
@@ -369,6 +372,11 @@ async function openModal(id) {
 }
 
 function switchMatchTab(tab) {
+  if (tab === 'performance') {
+    const status = state.activeMatch && state.activeMatch.status;
+    if (status !== 'live' && status !== 'finished') return;
+  }
+
   state.matchTab = tab;
   document.querySelectorAll('.match-tab-btn').forEach((btn) =>
     btn.classList.toggle('active', btn.innerText.toLowerCase().includes(tab)));
@@ -487,6 +495,61 @@ function renderModalContent() {
     });
 
     bodyHtml += `</div>`;
+  } else if (state.matchTab === 'performance') {
+    if (m.status === 'upcoming') {
+      bodyHtml = `
+        <div style="text-align:center; color:var(--sub); font-size:13px; padding:32px 12px;">
+          <i class="fa-solid fa-chart-simple" style="font-size:26px; display:block; margin-bottom:10px; opacity:.6;"></i>
+          Player ratings appear once the match is live or finished.
+        </div>
+      `;
+    } else {
+      const ratingClass = (rating) =>
+        rating >= 8.5 ? 'rating-high' : rating >= 7.8 ? 'rating-mid' : 'rating-normal';
+      const allPlayers = m.players[state.lineupTeam];
+      const starters = allPlayers.filter((p) => p.type === 'starter');
+      const subs = allPlayers.filter((p) => p.type === 'sub');
+      const note = m.status === 'live'
+        ? 'Ratings update as the match unfolds'
+        : 'Full-time ratings';
+
+      const playerCard = (p, icon) => `
+        <div class="player-card">
+          <div class="player-card-left">
+            <div class="player-avatar"><i class="fa-solid ${icon}"></i></div>
+            <div class="player-info">
+              <div class="player-name-text">${esc(p.name)} <span class="player-pos-tag">(${esc(p.pos)})</span></div>
+              <div class="player-stats-mini"><i class="fa-solid fa-chart-line"></i> ${esc(p.stats)}</div>
+            </div>
+          </div>
+          <div class="rating-badge ${ratingClass(p.rating)}">${p.rating}</div>
+        </div>
+      `;
+
+      bodyHtml = `
+        <div class="lineup-team-selector">
+          <button class="lineup-team-btn ${state.lineupTeam === 'home' ? 'active' : ''}" onclick="switchLineupTeam('home')">
+            <img src="${esc(m.homeLogo)}" /> ${esc(m.home)}
+          </button>
+          <button class="lineup-team-btn ${state.lineupTeam === 'away' ? 'active' : ''}" onclick="switchLineupTeam('away')">
+            <img src="${esc(m.awayLogo)}" /> ${esc(m.away)}
+          </button>
+        </div>
+
+        <div class="lineup-section-title" style="display:flex; justify-content:space-between; gap:8px;">
+          <span>Starting XI Ratings (${starters.length})</span>
+          <span style="color:var(--sub); font-weight:400; text-transform:none; letter-spacing:0;">${note}</span>
+        </div>
+        <div class="players-list-grid">
+          ${starters.map((p) => playerCard(p, 'fa-user')).join('')}
+        </div>
+
+        <div class="lineup-section-title" style="margin-top:20px;">Substitutes Ratings (${subs.length})</div>
+        <div class="players-list-grid">
+          ${subs.map((p) => playerCard(p, 'fa-user-clock')).join('')}
+        </div>
+      `;
+    }
   } else if (state.matchTab === 'stats') {
     bodyHtml = `
       <div style="background:var(--card); padding:16px; border-radius:10px; display:flex; flex-direction:column; gap:12px;">
@@ -1134,13 +1197,93 @@ function renderAuthButtons() {
   }
 
   const roleBadge = isAdmin() ? '<span class="admin-badge">Admin</span>' : '';
+  const deleteBtn = isAdmin()
+    ? ''
+    : '<button class="auth-btn danger" onclick="openDeleteAccount()">Delete Account</button>';
 
   group.innerHTML = `
     <span style="font-size:13px; font-weight:600; color:var(--live); display:flex; align-items:center; gap:6px;">
       👤 Hi, ${esc(state.user.fullName)} ${roleBadge}
     </span>
+    ${deleteBtn}
     <button class="auth-btn" onclick="handleLogout()">Logout</button>
   `;
+}
+
+function openDeleteAccount() {
+  if (!state.user || isAdmin()) return;
+
+  document.getElementById('deleteAccountBody').innerHTML = `
+    <form class="auth-form" onsubmit="handleDeleteAccountSubmit(event)">
+      <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:12px 14px; font-size:12px; line-height:1.6; color:var(--sub); margin-bottom:14px;">
+        <strong style="color:#f87171; display:block; margin-bottom:4px;">This cannot be undone.</strong>
+        Your account <strong style="color:var(--text);">${esc(state.user.email)}</strong> and every match you created
+        (with all goals and cards) will be permanently deleted.
+      </div>
+      <div class="form-group">
+        <label>Confirm your password</label>
+        <input type="password" name="password" placeholder="••••••••" required />
+      </div>
+      <div id="deleteAccountError" style="color:#f87171; font-size:12px; min-height:16px; margin-bottom:6px;"></div>
+      <button type="submit" class="form-submit-btn" style="background:#ef4444; border-color:#ef4444;">Delete my account</button>
+      <button type="button" class="auth-btn" style="width:100%; margin-top:8px; padding:10px;" onclick="closeDeleteAccount()">Cancel</button>
+    </form>
+  `;
+
+  document.getElementById('deleteAccountModal').classList.add('open');
+}
+
+function closeDeleteAccount() {
+  document.getElementById('deleteAccountModal').classList.remove('open');
+}
+
+function closeDeleteAccountOnBackdrop(event) {
+  if (event.target.id === 'deleteAccountModal') closeDeleteAccount();
+}
+
+async function handleDeleteAccountSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const button = form.querySelector('button[type="submit"]');
+  const errorEl = document.getElementById('deleteAccountError');
+  const password = new FormData(form).get('password');
+  const label = button.innerText;
+
+  errorEl.textContent = '';
+  button.disabled = true;
+  button.innerText = 'Deleting…';
+
+  try {
+    await api('/auth/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ password })
+    });
+
+    state.token = null;
+    state.user = null;
+    state.manageMatch = null;
+    state.adminData = null;
+    state.adminUser = null;
+    state.activeMatch = null;
+    state.activeMatchId = null;
+    localStorage.removeItem(TOKEN_KEY);
+
+    closeDeleteAccount();
+    closeManageModal();
+    closeModal();
+    closeAdminPanel();
+    setSimulationUi(true);
+    renderAuthButtons();
+    await refreshLeagueSilently();
+
+    alert('Your account and all your matches have been deleted.');
+  } catch (error) {
+    errorEl.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.innerText = label;
+  }
 }
 
 async function handleLogout() {
@@ -1158,6 +1301,7 @@ async function handleLogout() {
   localStorage.removeItem(TOKEN_KEY);
   closeManageModal();
   closeAdminPanel();
+  closeDeleteAccount();
   setSimulationUi(true);
   renderAuthButtons();
   render();
