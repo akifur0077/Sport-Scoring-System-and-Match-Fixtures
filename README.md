@@ -74,6 +74,26 @@ rating badge (green = 8.5+, yellow-green = 7.8+, grey = below) together with the
 Official (seeded) matches have `matches.created_by = NULL`, cannot be edited and cannot be
 deleted. A match must not be `finished` while adding/removing events; reopen it first.
 
+## Password reset email (Gmail SMTP)
+
+The **Forgot password?** link on the login form sends a 6-digit code to the registered Gmail
+address. Configure SMTP before starting the server:
+
+```powershell
+$env:SMTP_HOST='smtp.gmail.com'
+$env:SMTP_PORT='465'
+$env:SMTP_SECURE='true'
+$env:SMTP_USER='your.address@gmail.com'
+$env:SMTP_PASS='your-16-char-google-app-password'
+$env:MAIL_FROM='your.address@gmail.com'   # optional, defaults to SMTP_USER
+npm start
+```
+
+Use a Google **App Password** (Google Account → Security → 2-Step Verification → App passwords),
+not your normal Gmail password. Without SMTP settings the server prints the code to the console
+and the reset screen shows it as a demo code, so the flow still works locally. Codes expire in
+10 minutes, allow 5 attempts, and a new one can be requested after 60 seconds.
+
 ## Project structure
 
 ```
@@ -82,6 +102,9 @@ public/app.js         Frontend logic, calls the REST API
 server/schema.sql     Database schema (tables, indexes, constraints)
 server/db.js          SQLite connection, schema bootstrap and migrations
 server/password.js    scrypt password hashing / verification
+server/mailer.js      Gmail/SMTP OTP mailer (nodemailer)
+server/league-logos.js  Official league logo paths used by seed + migrations
+public/league-logos/  Official league logo PNGs served locally
 server/seed.js        Generates demo season data + ensures the admin account
 server/index.js       Express server, REST API, auth, live simulation
 data/foothub.db       SQLite database (created at runtime, git-ignored)
@@ -100,6 +123,7 @@ data/foothub.db       SQLite database (created at runtime, git-ignored)
 | `standings`    | League table rows: P/W/D/L, GF/GA, points, form                      |
 | `users`        | Accounts with `role` (`admin`/`user`), scrypt-hashed passwords        |
 | `sessions`     | Bearer tokens for logged-in users                                    |
+| `password_resets` | 6-digit password reset codes (HMAC-hashed, 10-minute expiry)      |
 | `app_state`    | Persisted simulation on/off flag                                     |
 
 All child tables use `ON DELETE CASCADE` on their parent league / match / team rows.
@@ -127,6 +151,8 @@ columns are added, and a legacy `goals` table is migrated into `match_events`).
 | POST   | `/api/simulation`                    | admin  | `{ "enabled": true/false }`                      |
 | POST   | `/api/auth/register`                 | —      | `{ fullName, email, password }` → token          |
 | POST   | `/api/auth/login`                    | —      | `{ email, password }` → token                    |
+| POST   | `/api/auth/forgot`                   | —      | `{ email }` → send 6-digit reset code            |
+| POST   | `/api/auth/reset`                    | —      | `{ email, otp, password }` → set new password    |
 | GET    | `/api/auth/me`                       | user   | Current user (`Authorization: Bearer <token>`)    |
 | POST   | `/api/auth/logout`                   | —      | Invalidate the current token                     |
 | DELETE | `/api/auth/me`                       | user   | `{ password }` → delete own account + its matches |
@@ -167,3 +193,9 @@ from their goal events whenever a goal is added or removed.
    এবং নিজের বানানো সব ম্যাচ মুছে ফেলতে পারে (অ্যাডমিন অ্যাকাউন্ট মোছা যাবে না)।
 ৯. ম্যাচ ডিটেইলে **Lineup** ট্যাবে শুধু খেলোয়াড়ের নাম ও পজিশন থাকে। **Live** ও **Finished**
    ম্যাচে অতিরিক্ত **Performance** ট্যাব আসে, যেখানে প্রতিটি খেলোয়াড়ের রেটিং ব্যাজ দেখা যায়।
+১০. পাসওয়ার্ড বক্সের পাশে চোখের আইকনে ক্লিক করলে পাসওয়ার্ড দেখা/লুকানো যায়।
+১১. পাসওয়ার্ড ভুলে গেলে **Forgot password?** → ইমেইল দিন → Gmail-এ ৬ ডিজিটের OTP যাবে →
+   OTP ও নতুন পাসওয়ার্ড দিয়ে পাসওয়ার্ড রিসেট হবে। SMTP সেট না থাকলে সার্ভার কনসোল ও
+   স্ক্রিনে ডেমো কোড দেখায়।
+১২. লিগ ট্যাব ও ব্যানারে এখন অফিসিয়াল লিগ লোগো (La Liga, Premier League, Champions League,
+   Bundesliga, Serie A, Ligue 1, World Cup) দেখায় — লোগোগুলো `public/league-logos/` এ লোকাল।

@@ -228,7 +228,9 @@ function render() {
 
   let html = `
     <div class="league-banner">
-      <div class="banner-icon">${league.icon}</div>
+      ${league.logoUrl
+        ? `<img class="banner-logo" src="${esc(league.logoUrl)}" alt="${esc(league.name)} logo" />`
+        : `<div class="banner-icon">${esc(league.icon)}</div>`}
       <div>
         <div class="banner-name">${esc(league.name)}</div>
         <div class="banner-sub">${esc(league.sub)} (20 Teams Competing)</div>
@@ -987,7 +989,10 @@ function renderAdminUser() {
         <div class="admin-match-main">
           <div class="admin-match-title">${esc(match.home)} <span style="color:var(--sub);">vs</span> ${esc(match.away)}</div>
           <div class="admin-match-sub">
-            ${esc(match.leagueIcon)} ${esc(match.leagueName)} ·
+            ${match.leagueLogo
+              ? `<img src="${esc(match.leagueLogo)}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;" />`
+              : esc(match.leagueIcon)}
+            ${esc(match.leagueName)} ·
             ${esc(match.day)} ${esc(match.time)} ·
             <span style="color:${match.status === 'live' ? 'var(--live)' : match.status === 'finished' ? 'var(--sub)' : 'var(--upcoming)'};">${statusLabel}</span>
             · #${match.id}
@@ -1067,6 +1072,27 @@ async function deleteAdminMatch(id) {
 
 /* ── authentication ──────────────────────────────────────────── */
 
+function passwordFieldHtml(name, placeholder, extra = '') {
+  return `
+    <div class="password-field">
+      <input type="password" name="${name}" placeholder="${placeholder}" required ${extra} />
+      <button type="button" class="password-toggle" onclick="togglePasswordField(this)" aria-label="Show password">
+        <i class="fa-solid fa-eye"></i>
+      </button>
+    </div>
+  `;
+}
+
+function togglePasswordField(button) {
+  const input = button.parentElement.querySelector('input');
+  if (!input) return;
+
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  button.innerHTML = `<i class="fa-solid fa-eye${show ? '-slash' : ''}"></i>`;
+  button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+}
+
 function openAuthModal(type) {
   const titleEl = document.getElementById('authModalTitle');
   const bodyEl = document.getElementById('authModalBody');
@@ -1081,7 +1107,10 @@ function openAuthModal(type) {
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" name="password" placeholder="••••••••" required />
+          ${passwordFieldHtml('password', '••••••••')}
+        </div>
+        <div style="text-align:right; margin-top:-6px;">
+          <button type="button" class="link-btn" onclick="openForgotPassword()">Forgot password?</button>
         </div>
         <div id="authError" style="color:#f87171; font-size:12px; min-height:16px; margin-bottom:6px;"></div>
         <button type="submit" class="form-submit-btn">Login</button>
@@ -1101,7 +1130,7 @@ function openAuthModal(type) {
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" name="password" placeholder="••••••••" required minlength="6" />
+          ${passwordFieldHtml('password', '••••••••', 'minlength="6"')}
         </div>
         <div id="authError" style="color:#f87171; font-size:12px; min-height:16px; margin-bottom:6px;"></div>
         <button type="submit" class="form-submit-btn">Register</button>
@@ -1110,6 +1139,118 @@ function openAuthModal(type) {
   }
 
   document.getElementById('authModal').classList.add('open');
+}
+
+function openForgotPassword() {
+  document.getElementById('authModalTitle').innerText = 'Forgot Password';
+  document.getElementById('authModalBody').innerHTML = `
+    <form class="auth-form" onsubmit="handleForgotSubmit(event)">
+      <div class="auth-info-box">
+        Enter the email you registered with. We will send a <strong>6-digit code</strong> to that
+        Gmail address. The code expires in 10 minutes.
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="name@example.com" required />
+      </div>
+      <div id="authError" style="color:#f87171; font-size:12px; min-height:16px;"></div>
+      <button type="submit" class="form-submit-btn">Send code</button>
+      <button type="button" class="link-btn" style="align-self:center;" onclick="openAuthModal('login')">Back to login</button>
+    </form>
+  `;
+  document.getElementById('authModal').classList.add('open');
+}
+
+async function handleForgotSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const button = form.querySelector('button[type="submit"]');
+  const errorEl = document.getElementById('authError');
+  const email = new FormData(form).get('email').trim().toLowerCase();
+  const label = button.innerText;
+
+  errorEl.textContent = '';
+  button.disabled = true;
+  button.innerText = 'Sending…';
+
+  try {
+    const result = await api('/auth/forgot', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+    showResetCodeForm(email, result);
+  } catch (error) {
+    errorEl.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.innerText = label;
+  }
+}
+
+function showResetCodeForm(email, info = {}) {
+  document.getElementById('authModalTitle').innerText = 'Enter Reset Code';
+  const devBox = info.devCode
+    ? `<div class="auth-info-box">
+         SMTP is not configured, so the email was not sent. Use this demo code:
+         <span class="dev-code">${esc(info.devCode)}</span>
+       </div>`
+    : `<div class="auth-info-box">
+         A 6-digit code was sent to <strong style="color:var(--text);">${esc(email)}</strong>.
+         Check the inbox (and spam folder).
+       </div>`;
+
+  document.getElementById('authModalBody').innerHTML = `
+    <form class="auth-form" onsubmit="handleResetSubmit(event)" data-email="${esc(email)}">
+      ${devBox}
+      <div class="form-group">
+        <label>6-digit code</label>
+        <input type="text" name="otp" placeholder="123456" inputmode="numeric" pattern="[0-9]{6}"
+               maxlength="6" value="${esc(info.devCode || '')}" required />
+      </div>
+      <div class="form-group">
+        <label>New password</label>
+        ${passwordFieldHtml('password', 'At least 6 characters', 'minlength="6"')}
+      </div>
+      <div id="authError" style="color:#f87171; font-size:12px; min-height:16px;"></div>
+      <button type="submit" class="form-submit-btn">Set new password</button>
+      <button type="button" class="link-btn" style="align-self:center;" onclick="openForgotPassword()">Send a new code</button>
+    </form>
+  `;
+}
+
+async function handleResetSubmit(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const button = form.querySelector('button[type="submit"]');
+  const errorEl = document.getElementById('authError');
+  const data = Object.fromEntries(new FormData(form).entries());
+  const email = form.dataset.email;
+  const label = button.innerText;
+
+  errorEl.textContent = '';
+  button.disabled = true;
+  button.innerText = 'Updating…';
+
+  try {
+    await api('/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp: data.otp, password: data.password })
+    });
+
+    document.getElementById('authModalTitle').innerText = 'Password Updated';
+    document.getElementById('authModalBody').innerHTML = `
+      <div class="auth-info-box" style="border-color:rgba(34,197,94,.4); color:#86efac;">
+        Your password has been changed. Log in with the new password.
+      </div>
+      <button class="form-submit-btn" style="width:100%;" onclick="openAuthModal('login')">Back to login</button>
+    `;
+  } catch (error) {
+    errorEl.textContent = error.message;
+    button.disabled = false;
+    button.innerText = label;
+  }
 }
 
 function closeAuthModal() {
@@ -1222,7 +1363,7 @@ function openDeleteAccount() {
       </div>
       <div class="form-group">
         <label>Confirm your password</label>
-        <input type="password" name="password" placeholder="••••••••" required />
+        ${passwordFieldHtml('password', '••••••••')}
       </div>
       <div id="deleteAccountError" style="color:#f87171; font-size:12px; min-height:16px; margin-bottom:6px;"></div>
       <button type="submit" class="form-submit-btn" style="background:#ef4444; border-color:#ef4444;">Delete my account</button>

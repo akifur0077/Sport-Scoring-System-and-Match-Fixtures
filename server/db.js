@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
+const LEAGUE_LOGOS = require('./league-logos');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'foothub.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
@@ -28,6 +29,16 @@ function migrate() {
 
   if (!columnsOf('matches').includes('created_by')) {
     db.exec('ALTER TABLE matches ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+  }
+
+  if (!columnsOf('leagues').includes('logo_url')) {
+    db.exec("ALTER TABLE leagues ADD COLUMN logo_url TEXT NOT NULL DEFAULT ''");
+  }
+
+  // Keep official league logos in sync even for databases seeded by older versions.
+  const setLeagueLogo = db.prepare('UPDATE leagues SET logo_url = ? WHERE key = ?');
+  for (const [key, url] of Object.entries(LEAGUE_LOGOS)) {
+    setLeagueLogo.run(url, key);
   }
 
   const hasLegacyGoals = db.prepare(

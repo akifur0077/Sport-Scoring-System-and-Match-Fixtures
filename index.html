@@ -270,6 +270,10 @@
       background: var(--card);
     }
     .tab-icon { font-size: 18px; }
+    .tab-logo {
+      width: 22px; height: 22px; object-fit: contain;
+      background: #fff; border-radius: 50%; padding: 2px; flex-shrink: 0;
+    }
 
     .tab[data-league="laliga"].active { border-color: var(--accent-la); color: var(--accent-la); }
     .tab[data-league="epl"].active    { border-color: var(--accent-ep); color: var(--accent-ep); }
@@ -359,6 +363,10 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     .banner-icon { font-size: 40px; }
+    .banner-logo {
+      width: 62px; height: 62px; object-fit: contain;
+      background: #fff; border-radius: 14px; padding: 6px; flex-shrink: 0;
+    }
     .banner-name {
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 26px;
@@ -606,6 +614,28 @@
     .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
     .form-row > .form-group { flex: 1; min-width: 130px; }
 
+    .password-field { position: relative; display: flex; }
+    .password-field input { flex: 1; padding-right: 44px; }
+    .password-toggle {
+      position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--sub); cursor: pointer;
+      padding: 6px 8px; font-size: 13px; line-height: 1;
+    }
+    .password-toggle:hover { color: var(--text); }
+    .link-btn {
+      background: none; border: none; color: var(--accent-la);
+      font-size: 12px; font-weight: 600; cursor: pointer; padding: 0;
+    }
+    .link-btn:hover { text-decoration: underline; }
+    .auth-info-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--sub);
+    }
+    .dev-code {
+      display: block; margin-top: 6px; color: var(--live); font-weight: 700;
+      letter-spacing: 3px; font-size: 16px;
+    }
+
     /* ── CUSTOM MATCH / ADMIN CONTROLS ───────────── */
     .admin-panel-btn {
       padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(168,85,247,0.45);
@@ -764,13 +794,13 @@
 
 <div class="tabs-wrapper">
   <div class="tabs" id="leagueTabs">
-    <button class="tab active" data-league="laliga" onclick="switchLeague('laliga')"><span class="tab-icon">🇪🇸</span> LA LIGA</button>
-    <button class="tab" data-league="epl" onclick="switchLeague('epl')"><span class="tab-icon">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span> PREMIER LEAGUE</button>
-    <button class="tab" data-league="ucl" onclick="switchLeague('ucl')"><span class="tab-icon">⭐</span> CHAMPIONS LEAGUE</button>
-    <button class="tab" data-league="bundesliga" onclick="switchLeague('bundesliga')"><span class="tab-icon">🇩🇪</span> BUNDESLIGA</button>
-    <button class="tab" data-league="seriea" onclick="switchLeague('seriea')"><span class="tab-icon">🇮🇹</span> SERIE A</button>
-    <button class="tab" data-league="ligue1" onclick="switchLeague('ligue1')"><span class="tab-icon">🇫🇷</span> LIGUE 1</button>
-    <button class="tab" data-league="wc" onclick="switchLeague('wc')"><span class="tab-icon">🌍</span> WORLD CUP 2026</button>
+    <button class="tab active" data-league="laliga" onclick="switchLeague('laliga')"><img class="tab-logo" src="/league-logos/laliga.png" alt="La Liga logo" /> LA LIGA</button>
+    <button class="tab" data-league="epl" onclick="switchLeague('epl')"><img class="tab-logo" src="/league-logos/epl.png" alt="Premier League logo" /> PREMIER LEAGUE</button>
+    <button class="tab" data-league="ucl" onclick="switchLeague('ucl')"><img class="tab-logo" src="/league-logos/ucl.png" alt="Champions League logo" /> CHAMPIONS LEAGUE</button>
+    <button class="tab" data-league="bundesliga" onclick="switchLeague('bundesliga')"><img class="tab-logo" src="/league-logos/bundesliga.png" alt="Bundesliga logo" /> BUNDESLIGA</button>
+    <button class="tab" data-league="seriea" onclick="switchLeague('seriea')"><img class="tab-logo" src="/league-logos/seriea.png" alt="Serie A logo" /> SERIE A</button>
+    <button class="tab" data-league="ligue1" onclick="switchLeague('ligue1')"><img class="tab-logo" src="/league-logos/ligue1.png" alt="Ligue 1 logo" /> LIGUE 1</button>
+    <button class="tab" data-league="wc" onclick="switchLeague('wc')"><img class="tab-logo" src="/league-logos/wc.png" alt="World Cup logo" /> WORLD CUP 2026</button>
   </div>
 </div>
 

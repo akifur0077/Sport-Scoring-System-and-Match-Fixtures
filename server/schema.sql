@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS leagues (
   key           TEXT    NOT NULL UNIQUE,
   name          TEXT    NOT NULL,
   icon          TEXT    NOT NULL,
+  logo_url      TEXT    NOT NULL DEFAULT '',
   sub           TEXT    NOT NULL DEFAULT '',
   season        TEXT    NOT NULL DEFAULT '2025/26',
   total_matches INTEGER NOT NULL DEFAULT 0,
@@ -44,6 +45,18 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email      TEXT    NOT NULL,
+  otp_hash   TEXT    NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
 
 CREATE TABLE IF NOT EXISTS matches (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

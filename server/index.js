@@ -7,9 +7,14 @@ const path = require('node:path');
 const express = require('express');
 const db = require('./db');
 const { hashPassword, verifyPassword } = require('./password');
+const { sendOtpEmail, mailConfigured } = require('./mailer');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const RESET_SECRET = process.env.PASSWORD_RESET_SECRET || crypto.randomBytes(32).toString('hex');
+const RESET_TTL_MS = 10 * 60 * 1000;
+const RESET_COOLDOWN_MS = 60 * 1000;
+const RESET_MAX_ATTEMPTS = 5;
 
 app.use(express.json());
 app.use('/api', (req, res, next) => {
@@ -139,6 +144,7 @@ function presentLeague(row) {
     key: row.key,
     name: row.name,
     icon: row.icon,
+    logoUrl: row.logo_url || '',
     sub: row.sub,
     season: row.season,
     stats: {
@@ -567,7 +573,7 @@ const selectAdminStats = db.prepare(`
 
 const selectUserMatches = db.prepare(`
   SELECT m.id, m.status, m.day_label, m.time_label, m.home_score, m.away_score, m.venue,
-         l.key AS league_key, l.name AS league_name, l.icon AS league_icon,
+         l.key AS league_key, l.name AS league_name, l.icon AS league_icon, l.logo_url AS league_logo,
          h.name AS home_name, a.name AS away_name
   FROM matches m
   JOIN leagues l ON l.id = m.league_id
@@ -619,7 +625,8 @@ app.get('/api/admin/users/:id/matches', requireAdmin, (req, res) => {
     venue: row.venue,
     leagueKey: row.league_key,
     leagueName: row.league_name,
-    leagueIcon: row.league_icon
+    leagueIcon: row.league_icon,
+    leagueLogo: row.league_logo || ''
   }));
 
   res.json({
@@ -765,6 +772,107 @@ app.post('/api/auth/logout', (req, res) => {
   const token = bearerToken(req);
   if (token) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
   res.json({ ok: true });
+});
+
+/* ── password reset with a 6-digit email code ────────────────── */
+
+function hashResetCode(userId, code) {
+  return crypto.createHmac('sha256', RESET_SECRET).update(`${userId}:${code}`).digest('hex');
+}
+
+app.post('/api/auth/forgot', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  const genericReply = {
+    ok: true,
+    message: 'If that email is registered, a 6-digit code has been sent.',
+    emailSent: mailConfigured()
+  };
+
+  const user = db.prepare('SELECT id, email, role FROM users WHERE email = ?').get(email);
+  if (!user) return res.json(genericReply);
+
+  const now = Date.now();
+  const latest = db.prepare(
+    'SELECT created_at FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1'
+  ).get(user.id);
+
+  if (latest && now - latest.created_at < RESET_COOLDOWN_MS) {
+    const wait = Math.ceil((RESET_COOLDOWN_MS - (now - latest.created_at)) / 1000);
+    return res.status(429).json({ error: `Please wait ${wait}s before requesting another code.` });
+  }
+
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+
+  db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+  db.prepare(`
+    INSERT INTO password_resets (user_id, email, otp_hash, attempts, expires_at, created_at)
+    VALUES (?, ?, ?, 0, ?, ?)
+  `).run(user.id, user.email, hashResetCode(user.id, code), now + RESET_TTL_MS, now);
+
+  try {
+    const { sent } = await sendOtpEmail(user.email, code);
+    if (!sent) {
+      console.log(`[password reset] SMTP not configured — code for ${user.email}: ${code}`);
+      return res.json({ ...genericReply, emailSent: false, devCode: code });
+    }
+    return res.json(genericReply);
+  } catch (error) {
+    console.error('Password reset email failed:', error.message);
+    return res.status(502).json({ error: 'Could not send the email. Check the SMTP settings.' });
+  }
+});
+
+app.post('/api/auth/reset', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const code = String(req.body?.otp || '').replace(/\D/g, '');
+  const password = String(req.body?.password || '');
+
+  if (!EMAIL_RE.test(email) || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+
+  const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
+  const row = user
+    ? db.prepare('SELECT * FROM password_resets WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(user.id)
+    : null;
+  const invalid = { error: 'Invalid or expired code. Request a new one.' };
+
+  if (!user || !row) return res.status(400).json(invalid);
+
+  if (row.expires_at < Date.now()) {
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+    return res.status(400).json(invalid);
+  }
+
+  if (row.attempts >= RESET_MAX_ATTEMPTS) {
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+    return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
+  }
+
+  if (row.otp_hash !== hashResetCode(user.id, code)) {
+    db.prepare('UPDATE password_resets SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+    return res.status(400).json(invalid);
+  }
+
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), user.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  res.json({ ok: true, message: 'Password updated. You can log in with the new password.' });
 });
 
 /** A logged-in user closes their own account; their matches go with it. */

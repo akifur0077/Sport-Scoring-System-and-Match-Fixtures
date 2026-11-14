@@ -9,6 +9,7 @@
 
 const db = require('./db');
 const { hashPassword } = require('./password');
+const LEAGUE_LOGOS = require('./league-logos');
 
 const RESET = process.argv.includes('--reset');
 
@@ -190,8 +191,8 @@ function buildCards(matchId, team, yellow, red) {
 /* ── database helpers ──────────────────────────────────────────── */
 
 const insertLeague = db.prepare(`
-  INSERT INTO leagues (key, name, icon, sub, season, total_matches, total_goals, avg_goals)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO leagues (key, name, icon, logo_url, sub, season, total_matches, total_goals, avg_goals)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertTeam = db.prepare('INSERT INTO teams (league_id, name, logo_url) VALUES (?, ?, ?)');
 const insertPlayer = db.prepare(`
@@ -271,7 +272,7 @@ function seed() {
   try {
     for (const [key, leagueMeta] of Object.entries(LEAGUES)) {
       const leagueId = Number(insertLeague.run(
-        key, leagueMeta.name, leagueMeta.icon, leagueMeta.sub, '2025/26', 0, 0, 0
+        key, leagueMeta.name, leagueMeta.icon, LEAGUE_LOGOS[key] || '', leagueMeta.sub, '2025/26', 0, 0, 0
       ).lastInsertRowid);
 
       const teams = teamPools[key].map((name) => {
