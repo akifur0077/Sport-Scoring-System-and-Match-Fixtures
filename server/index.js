@@ -495,6 +495,99 @@ app.delete('/api/matches/:id', requireAdmin, (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════════════════
+   Admin dashboard — registered users and their custom matches
+   ══════════════════════════════════════════════════════════════════ */
+
+const selectAdminUsers = db.prepare(`
+  SELECT u.id,
+         u.full_name,
+         u.email,
+         u.role,
+         u.created_at,
+         (SELECT COUNT(*) FROM matches m WHERE m.created_by = u.id) AS match_count
+  FROM users u
+  ORDER BY CASE u.role WHEN 'admin' THEN 0 ELSE 1 END, u.id
+`);
+
+const selectAdminStats = db.prepare(`
+  SELECT
+    (SELECT COUNT(*) FROM users)                                AS users,
+    (SELECT COUNT(*) FROM users WHERE role = 'admin')           AS admins,
+    (SELECT COUNT(*) FROM matches)                              AS matches,
+    (SELECT COUNT(*) FROM matches WHERE created_by IS NOT NULL) AS custom_matches,
+    (SELECT COUNT(*) FROM match_events)                         AS events
+`);
+
+const selectUserMatches = db.prepare(`
+  SELECT m.id, m.status, m.day_label, m.time_label, m.home_score, m.away_score, m.venue,
+         l.key AS league_key, l.name AS league_name, l.icon AS league_icon,
+         h.name AS home_name, a.name AS away_name
+  FROM matches m
+  JOIN leagues l ON l.id = m.league_id
+  JOIN teams h   ON h.id = m.home_team_id
+  JOIN teams a   ON a.id = m.away_team_id
+  WHERE m.created_by = ?
+  ORDER BY m.id DESC
+`);
+
+function presentAdminUser(row) {
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    role: row.role,
+    createdAt: row.created_at,
+    matchCount: row.match_count
+  };
+}
+
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const stats = selectAdminStats.get();
+  res.json({
+    stats: {
+      users: stats.users,
+      admins: stats.admins,
+      matches: stats.matches,
+      customMatches: stats.custom_matches,
+      events: stats.events
+    },
+    users: selectAdminUsers.all().map(presentAdminUser)
+  });
+});
+
+app.get('/api/admin/users/:id/matches', requireAdmin, (req, res) => {
+  const user = db.prepare('SELECT id, full_name, email, role, created_at FROM users WHERE id = ?')
+    .get(Number(req.params.id));
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const matches = selectUserMatches.all(user.id).map((row) => ({
+    id: row.id,
+    status: row.status,
+    day: row.day_label,
+    time: row.time_label,
+    home: row.home_name,
+    away: row.away_name,
+    homeScore: row.home_score,
+    awayScore: row.away_score,
+    venue: row.venue,
+    leagueKey: row.league_key,
+    leagueName: row.league_name,
+    leagueIcon: row.league_icon
+  }));
+
+  res.json({
+    user: {
+      id: user.id,
+      fullName: user.full_name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.created_at
+    },
+    matches
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════
    Live simulation — admin controlled, official matches only
    ══════════════════════════════════════════════════════════════════ */
 

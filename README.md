@@ -41,7 +41,7 @@ The app has two roles, stored in `users.role`:
 | Role    | Can do                                                                                      |
 | ------- | ------------------------------------------------------------------------------------------- |
 | `user`  | Create a match in any league, manage goals/cards in **their own** matches, browse everything |
-| `admin` | Everything a user can do, plus toggle the live simulation and delete user-created matches   |
+| `admin` | Everything a user can do, plus toggle the live simulation, view all users and delete their matches |
 
 An admin account is created automatically on startup:
 
@@ -60,6 +60,9 @@ to admin on startup.
 - **Manage button** — shown on user-created matches to the owner (and admins); lets the owner
   set the status and record goals, yellow cards and red cards with player name and minute.
 - **Delete button** — shown only to admins, and only on user-created matches.
+- **Admin Panel button** — visible only to a logged-in admin; shows totals and a list of every
+  registered user (name, email, role, join date, number of matches). Click **View matches** to
+  see that user's fixtures across all leagues, open one, or delete it.
 
 Official (seeded) matches have `matches.created_by = NULL`, cannot be edited and cannot be
 deleted. A match must not be `finished` while adding/removing events; reopen it first.
@@ -111,6 +114,8 @@ columns are added, and a legacy `goals` table is migrated into `match_events`).
 | DELETE | `/api/matches/:id/events/:eventId`   | owner  | Remove one event                                 |
 | PATCH  | `/api/matches/:id/status`            | owner  | `{ "status": "upcoming" \| "live" \| "finished" }` |
 | DELETE | `/api/matches/:id`                   | admin  | Delete a **user-created** match                  |
+| GET    | `/api/admin/users`                   | admin  | Dashboard totals + every registered user         |
+| GET    | `/api/admin/users/:id/matches`       | admin  | One user's created matches across all leagues    |
 | GET    | `/api/simulation`                    | admin  | Is the live simulator running?                   |
 | POST   | `/api/simulation`                    | admin  | `{ "enabled": true/false }`                      |
 | POST   | `/api/auth/register`                 | —      | `{ fullName, email, password }` → token          |
@@ -145,6 +150,8 @@ from their goal events whenever a goal is added or removed.
 ৪. ডেমো ডেটা নতুন করে বানাতে `npm run reset` চালান (ইউজার অ্যাকাউন্ট মুছে যাবে না)।
 ৫. অ্যাডমিন লগইন: `admin@foothub.com` / `admin123` — শুধু অ্যাডমিন লাইভ সিমুলেশন চালু/বন্ধ
    করতে পারে এবং ইউজারের তৈরি ম্যাচ ডিলিট করতে পারে।
-৬. লগইন করা যেকোনো ইউজার প্রতিটি লিগে (La Liga, Premier League, Champions League,
+৬. অ্যাডমিন লগইন করলে হেডারে **Admin Panel** বাটন আসবে — সেখানে সব ইউজারের নাম, ইমেইল,
+   রোল, ম্যাচ সংখ্যা দেখা যাবে; "View matches" চেপে কার কোন ম্যাচ আছে দেখে ডিলিট করা যাবে।
+৭. লগইন করা যেকোনো ইউজার প্রতিটি লিগে (La Liga, Premier League, Champions League,
    Bundesliga, Serie A, Ligue 1, World Cup) নিজের ম্যাচ তৈরি করতে পারে এবং সেই ম্যাচে গোল,
    হলুদ ও লাল কার্ড (খেলোয়াড়ের নাম ও মিনিটসহ) যোগ/মুছে ফেলতে পারে।

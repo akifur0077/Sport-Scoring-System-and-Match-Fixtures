@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FootHub — Live Scores, Fixtures & Standings</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%BD%3C/text%3E%3C/svg%3E" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -595,6 +596,13 @@
     .form-row > .form-group { flex: 1; min-width: 130px; }
 
     /* ── CUSTOM MATCH / ADMIN CONTROLS ───────────── */
+    .admin-panel-btn {
+      padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(168,85,247,0.45);
+      background: rgba(168,85,247,0.12); color: #c084fc;
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all .2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .admin-panel-btn:hover { background: rgba(168,85,247,0.22); }
     .create-match-btn {
       padding: 6px 16px; border-radius: 20px; border: 1px solid rgba(255,79,0,0.45);
       background: rgba(255,79,0,0.1); color: var(--accent-la);
@@ -637,6 +645,54 @@
     .event-main { flex: 1; font-size: 13px; font-weight: 600; }
     .event-meta { font-size: 11px; color: var(--sub); font-weight: 400; }
 
+    /* ── ADMIN PANEL ─────────────────────────────── */
+    .admin-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px; margin-bottom: 18px;
+    }
+    .admin-stat {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 10px; text-align: center;
+    }
+    .admin-stat-num {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 800; line-height: 1.1;
+    }
+    .admin-stat-lbl {
+      font-size: 9px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; color: var(--sub); margin-top: 2px;
+    }
+    .admin-user-row {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; margin-bottom: 8px;
+    }
+    .admin-user-main { flex: 1; min-width: 140px; }
+    .admin-user-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .admin-user-sub { font-size: 11px; color: var(--sub); margin-top: 2px; word-break: break-all; }
+    .admin-user-meta { font-size: 11px; color: var(--sub); text-align: right; }
+    .admin-user-meta strong { color: var(--text); font-size: 14px; }
+    .admin-match-row {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; margin-bottom: 8px;
+    }
+    .admin-match-main { flex: 1; min-width: 150px; }
+    .admin-match-title { font-size: 13px; font-weight: 700; }
+    .admin-match-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+    .admin-match-score {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; min-width: 54px; text-align: center;
+    }
+    .admin-section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+      color: var(--sub); margin: 18px 0 10px;
+    }
+    .role-chip {
+      font-size: 9px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+      padding: 2px 6px; border-radius: 8px;
+    }
+    .role-chip.admin { background: var(--accent-la); color: #fff; }
+    .role-chip.user { background: rgba(96,165,250,.15); color: #60a5fa; border: 1px solid rgba(96,165,250,.35); }
+
     /* ── FOOTER ──────────────────────────────────── */
     footer {
       background: var(--surface); border-top: 1px solid var(--border);
@@ -662,6 +718,9 @@
     <button class="sim-toggle-btn active" id="simToggleBtn" onclick="toggleSimulation()" style="display:none">
       <div class="pulse-dot"></div>
       <span id="simBtnText">SIMULATING LIVE</span>
+    </button>
+    <button class="admin-panel-btn" id="adminPanelBtn" onclick="openAdminPanel()" style="display:none">
+      <i class="fa-solid fa-shield-halved"></i> Admin Panel
     </button>
   </div>
 
@@ -761,6 +820,19 @@
       <div id="manageModalTitle" style="text-align:center; font-weight:700; font-size:18px;">Create Match</div>
     </div>
     <div class="modal-body" id="manageModalBody"></div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL MODAL -->
+<div class="modal-backdrop" id="adminModal" onclick="closeAdminPanelOnBackdrop(event)">
+  <div class="modal-container wide">
+    <div class="modal-header">
+      <button class="modal-close-btn" onclick="closeAdminPanel()"><i class="fa-solid fa-xmark"></i></button>
+      <div style="text-align:center; font-weight:700; font-size:18px;">
+        <i class="fa-solid fa-shield-halved" style="color:#c084fc;"></i> Admin Panel
+      </div>
+    </div>
+    <div class="modal-body" id="adminModalBody"></div>
   </div>
 </div>
 

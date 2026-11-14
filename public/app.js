@@ -22,7 +22,9 @@ const state = {
   token: localStorage.getItem(TOKEN_KEY),
   pollTimer: null,
   requestSeq: 0,
-  manageMatch: null
+  manageMatch: null,
+  adminData: null,
+  adminUser: null
 };
 
 /* ── helpers ─────────────────────────────────────────────────── */
@@ -815,6 +817,190 @@ async function deleteMatch(id) {
   }
 }
 
+/* ── admin panel ─────────────────────────────────────────────── */
+
+function closeAdminPanel() {
+  document.getElementById('adminModal').classList.remove('open');
+}
+
+function closeAdminPanelOnBackdrop(event) {
+  if (event.target.id === 'adminModal') closeAdminPanel();
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(String(value).replace(' ', 'T') + 'Z');
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+}
+
+async function openAdminPanel() {
+  if (!isAdmin()) return;
+  state.adminUser = null;
+  document.getElementById('adminModal').classList.add('open');
+  await loadAdminPanel();
+}
+
+async function loadAdminPanel() {
+  const body = document.getElementById('adminModalBody');
+  body.innerHTML = loadingBlock('Loading registered users…');
+
+  try {
+    state.adminData = await api('/admin/users');
+    renderAdminUsers();
+  } catch (error) {
+    body.innerHTML = errorBlock(error.message);
+  }
+}
+
+function renderAdminUsers() {
+  const data = state.adminData;
+  if (!data) return;
+
+  const users = data.users.map((user) => `
+    <div class="admin-user-row">
+      <div class="admin-user-main">
+        <div class="admin-user-name">
+          ${esc(user.fullName)}
+          <span class="role-chip ${user.role}">${user.role}</span>
+        </div>
+        <div class="admin-user-sub"><i class="fa-solid fa-envelope"></i> ${esc(user.email)}</div>
+      </div>
+      <div class="admin-user-meta">
+        <strong>${user.matchCount}</strong> match${user.matchCount === 1 ? '' : 'es'}<br>
+        joined ${esc(formatDateTime(user.createdAt))}
+      </div>
+      <button class="mini-btn accent" onclick="openAdminUser(${user.id})">View matches</button>
+    </div>
+  `).join('');
+
+  const empty = `
+    <div style="text-align:center; color:var(--sub); font-size:12px; padding:18px;">
+      No registered users yet.
+    </div>
+  `;
+
+  document.getElementById('adminModalBody').innerHTML = `
+    <div class="admin-stats">
+      <div class="admin-stat"><div class="admin-stat-num">${data.stats.users}</div><div class="admin-stat-lbl">Users</div></div>
+      <div class="admin-stat"><div class="admin-stat-num">${data.stats.admins}</div><div class="admin-stat-lbl">Admins</div></div>
+      <div class="admin-stat"><div class="admin-stat-num">${data.stats.customMatches}</div><div class="admin-stat-lbl">User Matches</div></div>
+      <div class="admin-stat"><div class="admin-stat-num">${data.stats.matches}</div><div class="admin-stat-lbl">All Matches</div></div>
+      <div class="admin-stat"><div class="admin-stat-num">${data.stats.events}</div><div class="admin-stat-lbl">Events</div></div>
+    </div>
+
+    <div class="admin-section-title">Registered users (${data.users.length})</div>
+    ${users || empty}
+  `;
+}
+
+async function openAdminUser(id) {
+  const body = document.getElementById('adminModalBody');
+  body.innerHTML = loadingBlock('Loading this user’s matches…');
+
+  try {
+    state.adminUser = await api(`/admin/users/${id}/matches`);
+    renderAdminUser();
+  } catch (error) {
+    body.innerHTML = errorBlock(error.message);
+  }
+}
+
+function backToAdminList() {
+  state.adminUser = null;
+  renderAdminUsers();
+}
+
+function renderAdminUser() {
+  const data = state.adminUser;
+  if (!data) return;
+
+  const rows = data.matches.map((match) => {
+    const statusLabel = match.status.charAt(0).toUpperCase() + match.status.slice(1);
+    return `
+      <div class="admin-match-row">
+        <div class="admin-match-score">${match.homeScore} - ${match.awayScore}</div>
+        <div class="admin-match-main">
+          <div class="admin-match-title">${esc(match.home)} <span style="color:var(--sub);">vs</span> ${esc(match.away)}</div>
+          <div class="admin-match-sub">
+            ${esc(match.leagueIcon)} ${esc(match.leagueName)} ·
+            ${esc(match.day)} ${esc(match.time)} ·
+            <span style="color:${match.status === 'live' ? 'var(--live)' : match.status === 'finished' ? 'var(--sub)' : 'var(--upcoming)'};">${statusLabel}</span>
+            · #${match.id}
+          </div>
+        </div>
+        <button class="mini-btn accent" onclick="viewAdminMatch(${match.id})">Open</button>
+        <button class="mini-btn danger" onclick="deleteAdminMatch(${match.id})">Delete</button>
+      </div>
+    `;
+  }).join('');
+
+  const empty = `
+    <div style="text-align:center; color:var(--sub); font-size:12px; padding:18px;">
+      This user has not created any matches yet.
+    </div>
+  `;
+
+  document.getElementById('adminModalBody').innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+      <button class="mini-btn" onclick="backToAdminList()">
+        <i class="fa-solid fa-arrow-left"></i> All users
+      </button>
+      <div style="flex:1; min-width:150px;">
+        <div class="admin-user-name">
+          ${esc(data.user.fullName)}
+          <span class="role-chip ${data.user.role}">${data.user.role}</span>
+        </div>
+        <div class="admin-user-sub">${esc(data.user.email)} · joined ${esc(formatDateTime(data.user.createdAt))}</div>
+      </div>
+      <div class="admin-user-meta"><strong>${data.matches.length}</strong> match${data.matches.length === 1 ? '' : 'es'}</div>
+    </div>
+
+    <div class="admin-section-title">Created matches (${data.matches.length})</div>
+    ${rows || empty}
+  `;
+}
+
+async function viewAdminMatch(id) {
+  const match = state.adminUser && state.adminUser.matches.find((row) => row.id === id);
+  closeAdminPanel();
+
+  if (match && match.leagueKey !== state.leagueKey) await switchLeague(match.leagueKey);
+  openModal(id);
+}
+
+async function deleteAdminMatch(id) {
+  if (!isAdmin()) return;
+  if (!confirm('Delete this match permanently?')) return;
+
+  try {
+    await api(`/matches/${id}`, { method: 'DELETE' });
+
+    if (state.activeMatchId === id) closeModal();
+    if (state.manageMatch && state.manageMatch.id === id) {
+      state.manageMatch = null;
+      closeManageModal();
+    }
+
+    await refreshLeagueSilently();
+
+    if (state.adminUser) {
+      const userId = state.adminUser.user.id;
+      const [list, detail] = await Promise.all([
+        api('/admin/users'),
+        api(`/admin/users/${userId}/matches`)
+      ]);
+      state.adminData = list;
+      state.adminUser = detail;
+      renderAdminUser();
+    } else {
+      await loadAdminPanel();
+    }
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
 /* ── authentication ──────────────────────────────────────────── */
 
 function openAuthModal(type) {
@@ -931,10 +1117,12 @@ function renderAuthButtons() {
   const group = document.getElementById('authButtonGroup');
   const createButton = document.getElementById('createMatchBtn');
   const simulationButton = document.getElementById('simToggleBtn');
+  const adminButton = document.getElementById('adminPanelBtn');
 
   const loggedIn = Boolean(state.user);
   createButton.style.display = loggedIn ? 'inline-flex' : 'none';
   simulationButton.style.display = isAdmin() ? 'flex' : 'none';
+  adminButton.style.display = isAdmin() ? 'inline-flex' : 'none';
 
   if (!loggedIn) {
     group.innerHTML = `
@@ -964,8 +1152,11 @@ async function handleLogout() {
   state.token = null;
   state.user = null;
   state.manageMatch = null;
+  state.adminData = null;
+  state.adminUser = null;
   localStorage.removeItem(TOKEN_KEY);
   closeManageModal();
+  closeAdminPanel();
   setSimulationUi(true);
   renderAuthButtons();
   render();
