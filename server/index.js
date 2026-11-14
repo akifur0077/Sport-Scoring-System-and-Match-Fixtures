@@ -98,10 +98,14 @@ const toScorerText = (events) =>
 
 function presentMatch(row, events = []) {
   const goals = events.filter((event) => event.type === 'goal');
+  const kickoff = parseKickoff(row.kickoff_at);
+
   return {
     id: row.id,
-    day: row.day_label,
+    day: kickoff ? dayLabelOf(kickoff) : row.day_label,
+    date: kickoff ? dayLabelOf(kickoff) : row.day_label,
     time: row.time_label,
+    kickoffTime: kickoff ? timeLabelOf(kickoff) : (row.status === 'upcoming' ? row.time_label : ''),
     status: row.status,
     home: row.home_name,
     homeLogo: row.home_logo,
@@ -297,6 +301,43 @@ function cleanText(value, fallback, maxLength) {
   return (text || fallback).slice(0, maxLength);
 }
 
+/* ── kickoff date/time helpers ───────────────────────────────── */
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function parseKickoff(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dayLabelOf(date) {
+  return `${WEEKDAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}
+
+function timeLabelOf(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function isoLocal(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` +
+    `T${timeLabelOf(date)}:00`;
+}
+
+/** Turn the create-match form's "Today / Tomorrow / Yesterday + HH:MM" into a real date. */
+function kickoffFromDay(dayLabel, timeLabel) {
+  const offset = dayLabel === 'Tomorrow' ? 1 : dayLabel === 'Yesterday' ? -1 : 0;
+  const parsed = /^(\d{1,2}):(\d{2})$/.exec(String(timeLabel || ''));
+  const hours = parsed ? Math.min(23, Number(parsed[1])) : 20;
+  const minutes = parsed ? Math.min(59, Number(parsed[2])) : 0;
+
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    League / match API
    ══════════════════════════════════════════════════════════════════ */
@@ -356,20 +397,23 @@ app.post('/api/leagues/:key/matches', requireAuth, (req, res) => {
   }
 
   const status = req.body?.status === 'live' ? 'live' : 'upcoming';
-  const dayLabel = cleanText(req.body?.dayLabel, 'Today', 30);
-  const timeLabel = cleanText(req.body?.timeLabel, '20:00', 20);
+  const requestedDay = cleanText(req.body?.dayLabel, 'Today', 30);
+  const requestedTime = cleanText(req.body?.timeLabel, '20:00', 20);
+  const kickoff = kickoffFromDay(requestedDay, requestedTime);
+  const dayLabel = dayLabelOf(kickoff);
+  const timeLabel = timeLabelOf(kickoff);
   const venue = cleanText(req.body?.venue, 'TBD', 100);
   const referee = cleanText(req.body?.referee, 'TBD', 60);
 
   const matchId = Number(db.prepare(`
     INSERT INTO matches
       (league_id, match_code, day_label, time_label, status, home_team_id, away_team_id,
-       home_score, away_score, venue, referee, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+       home_score, away_score, venue, referee, created_by, kickoff_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
   `).run(
     league.id,
     `custom_${league.key}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    dayLabel, timeLabel, status, homeTeamId, awayTeamId, venue, referee, req.user.id
+    dayLabel, timeLabel, status, homeTeamId, awayTeamId, venue, referee, req.user.id, isoLocal(kickoff)
   ).lastInsertRowid);
 
   db.prepare('INSERT INTO match_stats (match_id) VALUES (?)').run(matchId);
@@ -475,8 +519,11 @@ app.patch('/api/matches/:id/status', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Invalid match status.' });
   }
 
+  const kickoff = parseKickoff(match.kickoff_at);
+  const upcomingTime = kickoff ? timeLabelOf(kickoff) : '20:00';
+
   db.prepare('UPDATE matches SET status = ?, time_label = ? WHERE id = ?')
-    .run(status, status === 'finished' ? 'FT' : status === 'upcoming' ? '20:00' : match.time_label, match.id);
+    .run(status, status === 'finished' ? 'FT' : status === 'upcoming' ? upcomingTime : match.time_label, match.id);
 
   res.json({ match: buildMatchDetail(match.id) });
 });

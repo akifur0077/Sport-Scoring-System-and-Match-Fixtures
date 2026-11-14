@@ -20,7 +20,8 @@ Open <http://localhost:3000>.
 
 The first start creates `data/foothub.db` and seeds 7 leagues (La Liga, Premier League,
 Champions League, Bundesliga, Serie A, Ligue 1, World Cup) with 20 teams, 30 matches and
-20-row standings each, plus 15 players per squad.
+20-row standings each, plus 15 players per squad. Every fixture gets its own kickoff date and
+time (live matches today, upcoming over the next days, finished over the previous days).
 
 ### Scripts
 

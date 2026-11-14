@@ -462,6 +462,11 @@
     .goal-scorers-mini i { color: var(--live); font-size: 9px; }
 
     .match-meta { font-size: 11px; color: var(--accent-la); font-weight: 600; margin-top: 4px; }
+    .match-when {
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      margin-top: 4px; font-size: 10px; line-height: 1.45; color: var(--sub);
+    }
+    .match-when i { color: var(--muted); font-size: 9px; margin-right: 3px; }
 
     /* ── STANDINGS ───────────────────────────────── */
     .standings-card {
@@ -794,7 +799,7 @@
     <div class="match-modal-tabs">
       <button class="match-tab-btn active" onclick="switchMatchTab('overview')">Overview</button>
       <button class="match-tab-btn" onclick="switchMatchTab('timeline')">Timeline</button>
-      <button class="match-tab-btn" onclick="switchMatchTab('lineup')">Lineup & Performance</button>
+      <button class="match-tab-btn" onclick="switchMatchTab('lineup')">Lineup</button>
       <button class="match-tab-btn" onclick="switchMatchTab('stats')">Stats</button>
     </div>
     <div class="modal-body" id="modalBodyContent" style="min-height: 420px;"></div>

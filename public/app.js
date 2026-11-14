@@ -287,13 +287,20 @@ function render() {
             ? `<div class="match-meta" style="color:var(--accent-l1);"><i class="fa-solid fa-user-pen"></i> ${esc(m.createdByName || 'Member')}'s match</div>`
             : '';
 
+          const whenHtml = `
+            <div class="match-when">
+              <span><i class="fa-regular fa-calendar"></i> ${esc(m.date || m.day)}</span>
+              ${m.kickoffTime ? `<span><i class="fa-regular fa-clock"></i> ${esc(m.kickoffTime)}</span>` : ''}
+            </div>
+          `;
+
           html += `
             <div class="match-card ${m.status}" onclick="openModal(${m.id})">
               <div class="team">
                 <div class="team-badge"><img src="${esc(m.homeLogo)}" alt="${esc(m.home)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none">${esc(m.home[0])}</span></div>
                 <div class="team-info"><div class="team-name">${esc(m.home)}</div><div class="team-record">Squad A</div></div>
               </div>
-              <div class="match-center">${center}<div class="match-meta"><i class="fa-solid fa-location-dot"></i> ${esc(m.venue)}</div>${ownerHtml}${actionsHtml}</div>
+              <div class="match-center">${center}<div class="match-meta"><i class="fa-solid fa-location-dot"></i> ${esc(m.venue)}</div>${whenHtml}${ownerHtml}${actionsHtml}</div>
               <div class="team away">
                 <div class="team-badge"><img src="${esc(m.awayLogo)}" alt="${esc(m.away)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none">${esc(m.away[0])}</span></div>
                 <div class="team-info"><div class="team-name">${esc(m.away)}</div><div class="team-record">Squad B</div></div>
@@ -452,17 +459,14 @@ function renderModalContent() {
     `;
 
     starters.forEach((p) => {
-      const rClass = p.rating >= 8.5 ? 'rating-high' : p.rating >= 7.8 ? 'rating-mid' : 'rating-normal';
       bodyHtml += `
         <div class="player-card">
           <div class="player-card-left">
             <div class="player-avatar"><i class="fa-solid fa-user"></i></div>
             <div class="player-info">
               <div class="player-name-text">${esc(p.name)} <span class="player-pos-tag">(${esc(p.pos)})</span></div>
-              <div class="player-stats-mini"><i class="fa-solid fa-chart-line"></i> ${esc(p.stats)}</div>
             </div>
           </div>
-          <div class="rating-badge ${rClass}">${p.rating}</div>
         </div>
       `;
     });
@@ -470,17 +474,14 @@ function renderModalContent() {
     bodyHtml += `</div><div class="lineup-section-title" style="margin-top:20px;">Substitutes (${subs.length} Players)</div><div class="players-list-grid">`;
 
     subs.forEach((p) => {
-      const rClass = p.rating >= 8.0 ? 'rating-high' : p.rating >= 7.4 ? 'rating-mid' : 'rating-normal';
       bodyHtml += `
         <div class="player-card">
           <div class="player-card-left">
             <div class="player-avatar"><i class="fa-solid fa-user-clock"></i></div>
             <div class="player-info">
               <div class="player-name-text">${esc(p.name)} <span class="player-pos-tag">(${esc(p.pos)} - SUB)</span></div>
-              <div class="player-stats-mini"><i class="fa-solid fa-info-circle"></i> ${esc(p.stats)}</div>
             </div>
           </div>
-          <div class="rating-badge ${rClass}">${p.rating}</div>
         </div>
       `;
     });

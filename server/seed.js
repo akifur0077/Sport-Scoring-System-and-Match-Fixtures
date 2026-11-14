@@ -201,8 +201,8 @@ const insertPlayer = db.prepare(`
 const insertMatch = db.prepare(`
   INSERT INTO matches
     (league_id, match_code, day_label, time_label, status, home_team_id, away_team_id,
-     home_score, away_score, venue, referee)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     home_score, away_score, venue, referee, kickoff_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertStats = db.prepare(`
   INSERT INTO match_stats
@@ -234,7 +234,35 @@ function wipeData() {
   }
 }
 
+/* ── kickoff date/time helpers ─────────────────────────────────── */
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function dayLabelOf(date) {
+  return `${WEEKDAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}
+
+function timeLabelOf(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function isoLocal(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` +
+    `T${timeLabelOf(date)}:00`;
+}
+
+/** A date offset from `base` (in days) at the given minute of the day. */
+function dateAt(base, dayOffset, minutes) {
+  const date = new Date(base);
+  date.setDate(date.getDate() + dayOffset);
+  date.setHours(0, 0, 0, 0);
+  date.setMinutes(minutes);
+  return date;
+}
+
 function seed() {
+  const now = new Date();
   let stadiumCounter = 0;
   let totalMatches = 0;
   let totalGoals = 0;
@@ -293,13 +321,16 @@ function seed() {
       /* ── matches: 15 live, 10 upcoming, 5 finished ── */
       const seasonStats = { matches: 0, played: 0, goals: 0 };
 
-      const addMatch = (status, homeTeam, awayTeam, homeScore, awayScore, dayLabel, timeLabel, referee) => {
+      const addMatch = (status, homeTeam, awayTeam, homeScore, awayScore, kickoff, referee) => {
         const venue = stadiumList[stadiumCounter % stadiumList.length];
         stadiumCounter += 1;
 
+        const dayLabel = dayLabelOf(kickoff);
+        const timeLabel = status === 'live' ? `${randInt(10, 85)}'` : status === 'finished' ? 'FT' : timeLabelOf(kickoff);
+
         const matchId = Number(insertMatch.run(
           leagueId, `${key}_${status}_${seasonStats.matches + 1}`, dayLabel, timeLabel, status,
-          homeTeam.id, awayTeam.id, homeScore, awayScore, venue, referee
+          homeTeam.id, awayTeam.id, homeScore, awayScore, venue, referee, isoLocal(kickoff)
         ).lastInsertRowid);
 
         seasonStats.matches += 1;
@@ -345,23 +376,27 @@ function seed() {
         const homeTeam = teams[i % 20];
         let awayTeam = teams[(i + 7) % 20];
         if (homeTeam === awayTeam) awayTeam = teams[(i + 1) % 20];
-        addMatch('live', homeTeam, awayTeam, liveScore(), liveScore(),
-          'Today', `${randInt(10, 85)}'`, 'J. Martinez');
+        // Live matches all kicked off today, at different times in the recent past.
+        const kickoff = new Date(now.getTime() - (15 + i * 8) * 60000);
+        addMatch('live', homeTeam, awayTeam, liveScore(), liveScore(), kickoff, 'J. Martinez');
       }
 
       for (let i = 0; i < 10; i++) {
         const homeTeam = teams[(i + 3) % 20];
         let awayTeam = teams[(i + 12) % 20];
         if (homeTeam === awayTeam) awayTeam = teams[(i + 2) % 20];
-        addMatch('upcoming', homeTeam, awayTeam, 0, 0, 'Tomorrow', '20:00', 'TBD');
+        // Upcoming fixtures spread over the next five days, each with its own time.
+        const kickoff = dateAt(now, 1 + (i % 5), 12 * 60 + i * 45);
+        addMatch('upcoming', homeTeam, awayTeam, 0, 0, kickoff, 'TBD');
       }
 
       for (let i = 0; i < 5; i++) {
         const homeTeam = teams[(i + 5) % 20];
         let awayTeam = teams[(i + 15) % 20];
         if (homeTeam === awayTeam) awayTeam = teams[(i + 4) % 20];
-        addMatch('finished', homeTeam, awayTeam, finishedScore(), finishedScore(),
-          'Yesterday', 'FT', 'A. Taylor');
+        // Finished matches were played on the previous three days.
+        const kickoff = dateAt(now, -1 - (i % 3), 14 * 60 + i * 30);
+        addMatch('finished', homeTeam, awayTeam, finishedScore(), finishedScore(), kickoff, 'A. Taylor');
       }
 
       // Banner shows whole-season figures while the DB stores a 30-match snapshot.
