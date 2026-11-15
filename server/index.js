@@ -11,6 +11,7 @@ const { sendOtpEmail, mailConfigured } = require('./mailer');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const MATCH_DURATION_MS = Number(process.env.MATCH_DURATION_MS) || 90 * 60 * 1000;
 const RESET_SECRET = process.env.PASSWORD_RESET_SECRET || crypto.randomBytes(32).toString('hex');
 const RESET_TTL_MS = 10 * 60 * 1000;
 const RESET_COOLDOWN_MS = 60 * 1000;
@@ -30,6 +31,12 @@ const selectLeague = db.prepare('SELECT * FROM leagues WHERE key = ?');
 const selectLeagues = db.prepare('SELECT * FROM leagues ORDER BY id');
 const selectTeams = db.prepare('SELECT * FROM teams WHERE league_id = ? ORDER BY id');
 const selectTeam = db.prepare('SELECT * FROM teams WHERE id = ?');
+const selectAllTeams = db.prepare(`
+  SELECT t.id, t.name, l.key AS league_key, l.name AS league_name
+  FROM teams t
+  JOIN leagues l ON l.id = t.league_id
+  ORDER BY l.id, t.name
+`);
 
 const selectMatchesByLeague = db.prepare(`
   SELECT m.*,
@@ -43,7 +50,9 @@ const selectMatchesByLeague = db.prepare(`
   JOIN teams a ON a.id = m.away_team_id
   LEFT JOIN users cu ON cu.id = m.created_by
   WHERE m.league_id = ?
-  ORDER BY CASE m.status WHEN 'live' THEN 0 WHEN 'upcoming' THEN 1 ELSE 2 END, m.id
+  ORDER BY CASE m.status WHEN 'live' THEN 0 WHEN 'upcoming' THEN 1 ELSE 2 END,
+           CASE WHEN m.created_by IS NULL THEN 1 ELSE 0 END,
+           m.id DESC
 `);
 
 const selectMatchById = db.prepare(`
@@ -348,6 +357,26 @@ function kickoffFromDay(dayLabel, timeLabel) {
   return date;
 }
 
+/** Turn the create-match form's "YYYY-MM-DD + HH:MM" into a real date. */
+function kickoffFromInput(dateLabel, timeLabel, fallbackDay) {
+  const parsedTime = /^(\d{1,2}):(\d{2})$/.exec(String(timeLabel || ''));
+  const hours = parsedTime ? Math.min(23, Number(parsedTime[1])) : 20;
+  const minutes = parsedTime ? Math.min(59, Number(parsedTime[2])) : 0;
+
+  const parsedDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateLabel || ''));
+  if (parsedDate) {
+    const year = Number(parsedDate[1]);
+    const month = Number(parsedDate[2]) - 1;
+    const day = Number(parsedDate[3]);
+    const date = new Date(year, month, day, hours, minutes, 0, 0);
+    if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+      return date;
+    }
+  }
+
+  return kickoffFromDay(fallbackDay || 'Today', timeLabel);
+}
+
 /* ══════════════════════════════════════════════════════════════════
    League / match API
    ══════════════════════════════════════════════════════════════════ */
@@ -358,6 +387,18 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/leagues', (req, res) => {
   res.json({ leagues: selectLeagues.all().map(presentLeague) });
+});
+
+/** Every club, used by the registration favourite-club dropdown. */
+app.get('/api/clubs', (req, res) => {
+  res.json({
+    clubs: selectAllTeams.all().map((row) => ({
+      id: row.id,
+      name: row.name,
+      leagueKey: row.league_key,
+      leagueName: row.league_name
+    }))
+  });
 });
 
 app.get('/api/leagues/:key', (req, res) => {
@@ -408,22 +449,24 @@ app.post('/api/leagues/:key/matches', requireAuth, (req, res) => {
 
   const status = req.body?.status === 'live' ? 'live' : 'upcoming';
   const requestedDay = cleanText(req.body?.dayLabel, 'Today', 30);
+  const requestedDate = cleanText(req.body?.dateLabel, '', 20);
   const requestedTime = cleanText(req.body?.timeLabel, '20:00', 20);
-  const kickoff = kickoffFromDay(requestedDay, requestedTime);
+  const kickoff = kickoffFromInput(requestedDate, requestedTime, requestedDay);
   const dayLabel = dayLabelOf(kickoff);
-  const timeLabel = timeLabelOf(kickoff);
+  const timeLabel = status === 'live' ? "1'" : timeLabelOf(kickoff);
   const venue = cleanText(req.body?.venue, 'TBD', 100);
   const referee = cleanText(req.body?.referee, 'TBD', 60);
 
   const matchId = Number(db.prepare(`
     INSERT INTO matches
       (league_id, match_code, day_label, time_label, status, home_team_id, away_team_id,
-       home_score, away_score, venue, referee, created_by, kickoff_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+       home_score, away_score, venue, referee, created_by, kickoff_at, live_started_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)
   `).run(
     league.id,
     `custom_${league.key}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    dayLabel, timeLabel, status, homeTeamId, awayTeamId, venue, referee, req.user.id, isoLocal(kickoff)
+    dayLabel, timeLabel, status, homeTeamId, awayTeamId, venue, referee, req.user.id,
+    isoLocal(kickoff), status === 'live' ? Date.now() : null
   ).lastInsertRowid);
 
   db.prepare('INSERT INTO match_stats (match_id) VALUES (?)').run(matchId);
@@ -442,9 +485,6 @@ app.post('/api/matches/:id/events', requireAuth, (req, res) => {
   const match = selectMatchById.get(Number(req.params.id));
   if (!match) return res.status(404).json({ error: 'Match not found.' });
 
-  if (!match.created_by) {
-    return res.status(403).json({ error: 'Official matches cannot be edited.' });
-  }
   if (match.created_by !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'You can only manage your own matches.' });
   }
@@ -489,9 +529,6 @@ app.delete('/api/matches/:id/events/:eventId', requireAuth, (req, res) => {
   const match = selectMatchById.get(Number(req.params.id));
   if (!match) return res.status(404).json({ error: 'Match not found.' });
 
-  if (!match.created_by) {
-    return res.status(403).json({ error: 'Official matches cannot be edited.' });
-  }
   if (match.created_by !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'You can only manage your own matches.' });
   }
@@ -517,9 +554,6 @@ app.patch('/api/matches/:id/status', requireAuth, (req, res) => {
   const match = selectMatchById.get(Number(req.params.id));
   if (!match) return res.status(404).json({ error: 'Match not found.' });
 
-  if (!match.created_by) {
-    return res.status(403).json({ error: 'Official matches cannot be edited.' });
-  }
   if (match.created_by !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'You can only manage your own matches.' });
   }
@@ -531,21 +565,26 @@ app.patch('/api/matches/:id/status', requireAuth, (req, res) => {
 
   const kickoff = parseKickoff(match.kickoff_at);
   const upcomingTime = kickoff ? timeLabelOf(kickoff) : '20:00';
+  const liveTime = match.status === 'live' && match.time_label !== 'FT' ? match.time_label : "1'";
+  const liveStartedAt = status === 'live'
+    ? (match.status === 'live' && match.live_started_at ? match.live_started_at : Date.now())
+    : null;
 
-  db.prepare('UPDATE matches SET status = ?, time_label = ? WHERE id = ?')
-    .run(status, status === 'finished' ? 'FT' : status === 'upcoming' ? upcomingTime : match.time_label, match.id);
+  db.prepare('UPDATE matches SET status = ?, time_label = ?, live_started_at = ? WHERE id = ?')
+    .run(
+      status,
+      status === 'finished' ? 'FT' : status === 'upcoming' ? upcomingTime : liveTime,
+      liveStartedAt,
+      match.id
+    );
 
   res.json({ match: buildMatchDetail(match.id) });
 });
 
-/** Only admins may remove a user-created fixture. */
+/** Only admins may remove any fixture, including the seeded official ones. */
 app.delete('/api/matches/:id', requireAdmin, (req, res) => {
   const match = selectMatchById.get(Number(req.params.id));
   if (!match) return res.status(404).json({ error: 'Match not found.' });
-
-  if (!match.created_by) {
-    return res.status(400).json({ error: 'Only user-created matches can be deleted.' });
-  }
 
   db.prepare('DELETE FROM matches WHERE id = ?').run(match.id);
   res.json({ ok: true });
@@ -724,6 +763,37 @@ function simulateTick() {
 }
 
 setInterval(simulateTick, 4000);
+
+/* ══════════════════════════════════════════════════════════════════
+   Automatic match completion — every live match finishes after 90 minutes
+   ══════════════════════════════════════════════════════════════════ */
+
+const AUTO_FINISH_INTERVAL_MS = Math.max(1000, Math.min(15000, Math.floor(MATCH_DURATION_MS / 30)));
+const selectExpiredLiveMatches = db.prepare(
+  "SELECT id FROM matches WHERE status = 'live' AND live_started_at IS NOT NULL AND live_started_at <= ?"
+);
+const selectUntimedLiveMatches = db.prepare(
+  "SELECT id FROM matches WHERE status = 'live' AND live_started_at IS NULL"
+);
+const startLiveTimer = db.prepare('UPDATE matches SET live_started_at = ? WHERE id = ?');
+const finishExpiredMatch = db.prepare(
+  "UPDATE matches SET status = 'finished', time_label = 'FT' WHERE id = ?"
+);
+
+function finishExpiredMatches() {
+  const now = Date.now();
+
+  // Databases created before live timestamps existed (or seeded by an older version).
+  for (const match of selectUntimedLiveMatches.all()) startLiveTimer.run(now, match.id);
+
+  const cutoff = now - MATCH_DURATION_MS;
+  const expired = selectExpiredLiveMatches.all(cutoff);
+  for (const match of expired) finishExpiredMatch.run(match.id);
+  return expired.map((match) => match.id);
+}
+
+finishExpiredMatches();
+setInterval(finishExpiredMatches, AUTO_FINISH_INTERVAL_MS);
 
 app.get('/api/simulation', requireAdmin, (req, res) => {
   res.json({ enabled: simulationEnabled() });

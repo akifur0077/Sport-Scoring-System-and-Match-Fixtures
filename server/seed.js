@@ -202,8 +202,8 @@ const insertPlayer = db.prepare(`
 const insertMatch = db.prepare(`
   INSERT INTO matches
     (league_id, match_code, day_label, time_label, status, home_team_id, away_team_id,
-     home_score, away_score, venue, referee, kickoff_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     home_score, away_score, venue, referee, kickoff_at, live_started_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertStats = db.prepare(`
   INSERT INTO match_stats
@@ -331,7 +331,8 @@ function seed() {
 
         const matchId = Number(insertMatch.run(
           leagueId, `${key}_${status}_${seasonStats.matches + 1}`, dayLabel, timeLabel, status,
-          homeTeam.id, awayTeam.id, homeScore, awayScore, venue, referee, isoLocal(kickoff)
+          homeTeam.id, awayTeam.id, homeScore, awayScore, venue, referee, isoLocal(kickoff),
+          status === 'live' ? Date.now() : null
         ).lastInsertRowid);
 
         seasonStats.matches += 1;

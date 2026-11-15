@@ -37,6 +37,12 @@ function migrate() {
     db.exec('ALTER TABLE matches ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
   }
 
+  // Epoch milliseconds when a match went live, used to auto-finish it after 90 minutes.
+  if (!columnsOf('matches').includes('live_started_at')) {
+    db.exec('ALTER TABLE matches ADD COLUMN live_started_at INTEGER');
+    db.prepare("UPDATE matches SET live_started_at = ? WHERE status = 'live'").run(Date.now());
+  }
+
   if (!columnsOf('leagues').includes('logo_url')) {
     db.exec("ALTER TABLE leagues ADD COLUMN logo_url TEXT NOT NULL DEFAULT ''");
   }

@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS matches (
   venue        TEXT    NOT NULL,
   referee      TEXT    NOT NULL,
   created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  kickoff_at   TEXT
+  kickoff_at   TEXT,
+  live_started_at INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league_id, status);

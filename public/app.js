@@ -13,6 +13,7 @@ const state = {
   filter: 'all',
   search: '',
   leagues: {},          // full league payload cache (matches + standings)
+  clubs: [],            // every club, for the registration dropdown
   simulating: true,
   activeMatchId: null,
   activeMatch: null,
@@ -33,6 +34,13 @@ function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
+}
+
+function todayInputValue() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 async function api(path, options = {}) {
@@ -86,7 +94,10 @@ async function init() {
 
   try {
     await restoreSession();
-    await loadLeague(state.leagueKey, { showLoader: false });
+    await Promise.all([
+      loadClubs(),
+      loadLeague(state.leagueKey, { showLoader: false })
+    ]);
 
     if (isAdmin()) await loadSimulationState();
     startPolling();
@@ -100,7 +111,16 @@ function isAdmin() {
 }
 
 function canManage(match) {
-  return Boolean(state.user && match.createdBy && (match.createdBy === state.user.id || isAdmin()));
+  return Boolean(state.user && (isAdmin() || (match.createdBy && match.createdBy === state.user.id)));
+}
+
+async function loadClubs() {
+  try {
+    const { clubs } = await api('/clubs');
+    state.clubs = clubs || [];
+  } catch {
+    state.clubs = [];
+  }
 }
 
 async function loadSimulationState() {
@@ -281,7 +301,7 @@ function render() {
           if (canManage(m)) {
             actions.push(`<button class="mini-btn accent" onclick="event.stopPropagation(); openManageModal(${m.id})">Manage</button>`);
           }
-          if (isAdmin() && m.createdBy) {
+          if (isAdmin()) {
             actions.push(`<button class="mini-btn danger" onclick="event.stopPropagation(); deleteMatch(${m.id})">Delete</button>`);
           }
           const actionsHtml = actions.length ? `<div class="match-actions">${actions.join('')}</div>` : '';
@@ -651,12 +671,10 @@ async function openCreateMatch() {
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Day</label>
-          <select name="dayLabel">
-            <option>Today</option><option>Tomorrow</option><option>Yesterday</option>
-          </select>
+          <label>Match Date</label>
+          <input type="date" name="dateLabel" value="${todayInputValue()}" required />
         </div>
-        <div class="form-group"><label>Kickoff / Clock</label><input name="timeLabel" value="20:00" maxlength="20" required /></div>
+        <div class="form-group"><label>Kickoff Time</label><input type="time" name="timeLabel" value="20:00" required /></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Venue</label><input name="venue" value="Custom Stadium" maxlength="100" required /></div>
@@ -1102,6 +1120,28 @@ function togglePasswordField(button) {
   button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
 }
 
+function clubOptionsHtml() {
+  const groups = new Map();
+  for (const club of state.clubs) {
+    if (!groups.has(club.leagueName)) groups.set(club.leagueName, []);
+    groups.get(club.leagueName).push(club.name);
+  }
+
+  if (groups.size) {
+    return [...groups.entries()].map(([leagueName, clubs]) =>
+      `<optgroup label="${esc(leagueName)}">${clubs
+        .map((name) => `<option value="${esc(name)}">${esc(name)}</option>`)
+        .join('')}</optgroup>`
+    ).join('');
+  }
+
+  const league = state.leagues[state.leagueKey];
+  if (!league || !league.teams) return '';
+  return league.teams
+    .map((team) => `<option value="${esc(team.name)}">${esc(team.name)}</option>`)
+    .join('');
+}
+
 function openAuthModal(type) {
   const titleEl = document.getElementById('authModalTitle');
   const bodyEl = document.getElementById('authModalBody');
@@ -1132,16 +1172,6 @@ function openAuthModal(type) {
   } else {
     titleEl.innerHTML = `<span class="register-brand-mark"><i class="fa-solid fa-futbol"></i></span>FOOTHUB`;
 
-    const leagueOptions = [
-      ['La Liga', 'La Liga'],
-      ['Premier League', 'Premier League'],
-      ['Champions League', 'Champions League'],
-      ['Bundesliga', 'Bundesliga'],
-      ['Serie A', 'Serie A'],
-      ['Ligue 1', 'Ligue 1'],
-      ['World Cup 2026', 'World Cup 2026']
-    ].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
-
     bodyEl.innerHTML = `
       <h2 class="register-title">Create Your Account</h2>
       <form class="auth-form register-form" onsubmit="handleAuthSubmit(event, 'register')">
@@ -1160,17 +1190,11 @@ function openAuthModal(type) {
           <label><i class="fa-solid fa-shield-halved"></i> Favourite Club</label>
           <div class="club-picker">
             <div class="club-crest" aria-hidden="true"><i class="fa-solid fa-futbol"></i></div>
-            <input type="text" name="favouriteClub" placeholder="Club name" maxlength="60" />
-            <select name="favouriteLeague" aria-label="Favourite league">
-              <option value="">Select</option>
-              ${leagueOptions}
+            <select name="favouriteClub" aria-label="Favourite club">
+              <option value="">Select your club</option>
+              ${clubOptionsHtml()}
             </select>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label><i class="fa-solid fa-location-dot"></i> Favourite City</label>
-          <input type="text" name="favouriteCity" placeholder="City name" maxlength="60" />
         </div>
 
         <div class="register-row">
@@ -1356,9 +1380,7 @@ async function handleAuthSubmit(event, action) {
           fullName: payload.fullName,
           email: payload.email,
           password: payload.password,
-          favouriteClub: payload.favouriteClub,
-          favouriteLeague: payload.favouriteLeague,
-          favouriteCity: payload.favouriteCity
+          favouriteClub: payload.favouriteClub
         })
       });
 
