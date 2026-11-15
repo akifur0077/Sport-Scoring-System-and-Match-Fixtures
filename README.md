@@ -67,6 +67,10 @@ to admin on startup.
 - **Delete Account button** — visible to non-admin users; asks for the password, then permanently
   deletes the account and all matches it created. The admin account cannot be deleted.
 
+Registration uses the dark two-column card design: name + email, favourite club + league, favourite
+city, password + confirm password, and a required terms checkbox. Passwords can be revealed with the
+eye button, and **Forgot password?** sends a 6-digit code to the registered email address.
+
 In the match detail modal, the **Lineup** tab lists player names and positions only. A
 **Performance** tab is available for **live** and **finished** matches and shows each player's
 rating badge (green = 8.5+, yellow-green = 7.8+, grey = below) together with their stat line.
@@ -121,14 +125,15 @@ data/foothub.db       SQLite database (created at runtime, git-ignored)
 | `match_stats`  | Possession, shots, fouls (1:1 with a match)                          |
 | `match_events` | Goals and cards: `type` = `goal` / `yellow` / `red`, player, minute   |
 | `standings`    | League table rows: P/W/D/L, GF/GA, points, form                      |
-| `users`        | Accounts with `role` (`admin`/`user`), scrypt-hashed passwords        |
+| `users`        | Accounts with `role` (`admin`/`user`), favourites and scrypt-hashed passwords |
 | `sessions`     | Bearer tokens for logged-in users                                    |
 | `password_resets` | 6-digit password reset codes (HMAC-hashed, 10-minute expiry)      |
 | `app_state`    | Persisted simulation on/off flag                                     |
 
 All child tables use `ON DELETE CASCADE` on their parent league / match / team rows.
-`server/db.js` upgrades older databases automatically (`users.role` and `matches.created_by`
-columns are added, and a legacy `goals` table is migrated into `match_events`).
+`server/db.js` upgrades older databases automatically (`users.role`, the favourite club/league/city
+columns and `matches.created_by` are added, league logos are refreshed, and a legacy `goals` table
+is migrated into `match_events`).
 
 ## API
 
@@ -149,7 +154,7 @@ columns are added, and a legacy `goals` table is migrated into `match_events`).
 | GET    | `/api/admin/users/:id/matches`       | admin  | One user's created matches across all leagues    |
 | GET    | `/api/simulation`                    | admin  | Is the live simulator running?                   |
 | POST   | `/api/simulation`                    | admin  | `{ "enabled": true/false }`                      |
-| POST   | `/api/auth/register`                 | —      | `{ fullName, email, password }` → token          |
+| POST   | `/api/auth/register`                 | —      | `{ fullName, email, password, favouriteClub?, favouriteLeague?, favouriteCity? }` → token |
 | POST   | `/api/auth/login`                    | —      | `{ email, password }` → token                    |
 | POST   | `/api/auth/forgot`                   | —      | `{ email }` → send 6-digit reset code            |
 | POST   | `/api/auth/reset`                    | —      | `{ email, otp, password }` → set new password    |

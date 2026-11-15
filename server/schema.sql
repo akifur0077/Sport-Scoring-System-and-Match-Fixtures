@@ -32,12 +32,15 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  full_name     TEXT    NOT NULL,
-  email         TEXT    NOT NULL UNIQUE,
-  password_hash TEXT    NOT NULL,
-  role          TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-  created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  full_name        TEXT    NOT NULL,
+  email            TEXT    NOT NULL UNIQUE,
+  password_hash    TEXT    NOT NULL,
+  role             TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  favourite_club   TEXT    NOT NULL DEFAULT '',
+  favourite_league TEXT    NOT NULL DEFAULT '',
+  favourite_city   TEXT    NOT NULL DEFAULT '',
+  created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

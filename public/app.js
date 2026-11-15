@@ -923,7 +923,12 @@ function renderAdminUsers() {
   const data = state.adminData;
   if (!data) return;
 
-  const users = data.users.map((user) => `
+  const users = data.users.map((user) => {
+    const favourites = [user.favouriteClub, user.favouriteLeague, user.favouriteCity]
+      .filter(Boolean)
+      .join(' · ');
+
+    return `
     <div class="admin-user-row">
       <div class="admin-user-main">
         <div class="admin-user-name">
@@ -931,6 +936,9 @@ function renderAdminUsers() {
           <span class="role-chip ${user.role}">${user.role}</span>
         </div>
         <div class="admin-user-sub"><i class="fa-solid fa-envelope"></i> ${esc(user.email)}</div>
+        ${favourites
+          ? `<div class="admin-user-sub"><i class="fa-solid fa-futbol"></i> ${esc(favourites)}</div>`
+          : ''}
       </div>
       <div class="admin-user-meta">
         <strong>${user.matchCount}</strong> match${user.matchCount === 1 ? '' : 'es'}<br>
@@ -938,7 +946,8 @@ function renderAdminUsers() {
       </div>
       <button class="mini-btn accent" onclick="openAdminUser(${user.id})">View matches</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const empty = `
     <div style="text-align:center; color:var(--sub); font-size:12px; padding:18px;">
@@ -1096,8 +1105,12 @@ function togglePasswordField(button) {
 function openAuthModal(type) {
   const titleEl = document.getElementById('authModalTitle');
   const bodyEl = document.getElementById('authModalBody');
+  const modal = document.getElementById('authModal');
+  const isRegister = type !== 'login';
 
-  if (type === 'login') {
+  modal.classList.toggle('register-mode', isRegister);
+
+  if (!isRegister) {
     titleEl.innerText = 'Login to FootHub';
     bodyEl.innerHTML = `
       <form class="auth-form" onsubmit="handleAuthSubmit(event, 'login')">
@@ -1117,31 +1130,81 @@ function openAuthModal(type) {
       </form>
     `;
   } else {
-    titleEl.innerText = 'Create an Account';
+    titleEl.innerHTML = `<span class="register-brand-mark"><i class="fa-solid fa-futbol"></i></span>FOOTHUB`;
+
+    const leagueOptions = [
+      ['La Liga', 'La Liga'],
+      ['Premier League', 'Premier League'],
+      ['Champions League', 'Champions League'],
+      ['Bundesliga', 'Bundesliga'],
+      ['Serie A', 'Serie A'],
+      ['Ligue 1', 'Ligue 1'],
+      ['World Cup 2026', 'World Cup 2026']
+    ].map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+
     bodyEl.innerHTML = `
-      <form class="auth-form" onsubmit="handleAuthSubmit(event, 'register')">
-        <div class="form-group">
-          <label>Full Name</label>
-          <input type="text" name="fullName" placeholder="John Doe" required minlength="2" />
+      <h2 class="register-title">Create Your Account</h2>
+      <form class="auth-form register-form" onsubmit="handleAuthSubmit(event, 'register')">
+        <div class="register-row">
+          <div class="form-group">
+            <label><i class="fa-regular fa-user"></i> Your Name</label>
+            <input type="text" name="fullName" placeholder="Full name" required minlength="2" maxlength="80" />
+          </div>
+          <div class="form-group">
+            <label><i class="fa-regular fa-envelope"></i> Email Address</label>
+            <input type="email" name="email" placeholder="name@example.com" required />
+          </div>
         </div>
+
         <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" name="email" placeholder="name@example.com" required />
+          <label><i class="fa-solid fa-shield-halved"></i> Favourite Club</label>
+          <div class="club-picker">
+            <div class="club-crest" aria-hidden="true"><i class="fa-solid fa-futbol"></i></div>
+            <input type="text" name="favouriteClub" placeholder="Club name" maxlength="60" />
+            <select name="favouriteLeague" aria-label="Favourite league">
+              <option value="">Select</option>
+              ${leagueOptions}
+            </select>
+          </div>
         </div>
+
         <div class="form-group">
-          <label>Password</label>
-          ${passwordFieldHtml('password', '••••••••', 'minlength="6"')}
+          <label><i class="fa-solid fa-location-dot"></i> Favourite City</label>
+          <input type="text" name="favouriteCity" placeholder="City name" maxlength="60" />
         </div>
-        <div id="authError" style="color:#f87171; font-size:12px; min-height:16px; margin-bottom:6px;"></div>
-        <button type="submit" class="form-submit-btn">Register</button>
+
+        <div class="register-row">
+          <div class="form-group">
+            <label><i class="fa-solid fa-lock"></i> Password</label>
+            ${passwordFieldHtml('password', '••••••••', 'minlength="6"')}
+          </div>
+          <div class="form-group">
+            <label><i class="fa-solid fa-lock"></i> Confirm Password</label>
+            ${passwordFieldHtml('confirmPassword', '••••••••', 'minlength="6"')}
+          </div>
+        </div>
+
+        <label class="terms-row">
+          <input type="checkbox" name="terms" required />
+          <span>I agree to the <a href="#" onclick="event.preventDefault()">Terms of Service</a> &amp;
+            <a href="#" onclick="event.preventDefault()">Privacy Policy</a>.</span>
+        </label>
+
+        <div id="authError" style="color:#f87171; font-size:12px; min-height:16px;"></div>
+        <button type="submit" class="form-submit-btn register-submit">Create Account <span>+</span></button>
+        <div class="register-footer">
+          Already have an account?
+          <button type="button" class="link-btn" onclick="openAuthModal('login')">Log In</button>
+        </div>
       </form>
     `;
   }
 
-  document.getElementById('authModal').classList.add('open');
+  modal.classList.add('open');
 }
 
 function openForgotPassword() {
+  document.getElementById('authModal').classList.remove('register-mode');
   document.getElementById('authModalTitle').innerText = 'Forgot Password';
   document.getElementById('authModalBody').innerHTML = `
     <form class="auth-form" onsubmit="handleForgotSubmit(event)">
@@ -1189,6 +1252,7 @@ async function handleForgotSubmit(event) {
 }
 
 function showResetCodeForm(email, info = {}) {
+  document.getElementById('authModal').classList.remove('register-mode');
   document.getElementById('authModalTitle').innerText = 'Enter Reset Code';
   const devBox = info.devCode
     ? `<div class="auth-info-box">
@@ -1271,6 +1335,12 @@ async function handleAuthSubmit(event, action) {
   const payload = Object.fromEntries(new FormData(form).entries());
 
   errorEl.textContent = '';
+
+  if (action === 'register' && payload.password !== payload.confirmPassword) {
+    errorEl.textContent = 'Passwords do not match.';
+    return;
+  }
+
   button.disabled = true;
   button.innerText = 'Please wait…';
 
@@ -1285,7 +1355,10 @@ async function handleAuthSubmit(event, action) {
         body: JSON.stringify({
           fullName: payload.fullName,
           email: payload.email,
-          password: payload.password
+          password: payload.password,
+          favouriteClub: payload.favouriteClub,
+          favouriteLeague: payload.favouriteLeague,
+          favouriteCity: payload.favouriteCity
         })
       });
 

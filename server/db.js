@@ -27,6 +27,12 @@ function migrate() {
     db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
   }
 
+  for (const column of ['favourite_club', 'favourite_league', 'favourite_city']) {
+    if (!columnsOf('users').includes(column)) {
+      db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+    }
+  }
+
   if (!columnsOf('matches').includes('created_by')) {
     db.exec('ALTER TABLE matches ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
   }

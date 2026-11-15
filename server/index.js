@@ -273,7 +273,8 @@ function currentUser(req) {
   if (!token) return null;
 
   return db.prepare(`
-    SELECT u.id, u.full_name, u.email, u.role
+    SELECT u.id, u.full_name, u.email, u.role,
+           u.favourite_club, u.favourite_league, u.favourite_city
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ?
@@ -299,7 +300,10 @@ const presentUser = (user) => ({
   id: user.id,
   fullName: user.full_name,
   email: user.email,
-  role: user.role
+  role: user.role,
+  favouriteClub: user.favourite_club || '',
+  favouriteLeague: user.favourite_league || '',
+  favouriteCity: user.favourite_city || ''
 });
 
 function cleanText(value, fallback, maxLength) {
@@ -556,6 +560,9 @@ const selectAdminUsers = db.prepare(`
          u.full_name,
          u.email,
          u.role,
+         u.favourite_club,
+         u.favourite_league,
+         u.favourite_city,
          u.created_at,
          (SELECT COUNT(*) FROM matches m WHERE m.created_by = u.id) AS match_count
   FROM users u
@@ -589,6 +596,9 @@ function presentAdminUser(row) {
     fullName: row.full_name,
     email: row.email,
     role: row.role,
+    favouriteClub: row.favourite_club || '',
+    favouriteLeague: row.favourite_league || '',
+    favouriteCity: row.favourite_city || '',
     createdAt: row.created_at,
     matchCount: row.match_count
   };
@@ -609,8 +619,10 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 });
 
 app.get('/api/admin/users/:id/matches', requireAdmin, (req, res) => {
-  const user = db.prepare('SELECT id, full_name, email, role, created_at FROM users WHERE id = ?')
-    .get(Number(req.params.id));
+  const user = db.prepare(`
+    SELECT id, full_name, email, role, favourite_club, favourite_league, favourite_city, created_at
+    FROM users WHERE id = ?
+  `).get(Number(req.params.id));
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
   const matches = selectUserMatches.all(user.id).map((row) => ({
@@ -635,6 +647,9 @@ app.get('/api/admin/users/:id/matches', requireAdmin, (req, res) => {
       fullName: user.full_name,
       email: user.email,
       role: user.role,
+      favouriteClub: user.favourite_club || '',
+      favouriteLeague: user.favourite_league || '',
+      favouriteCity: user.favourite_city || '',
       createdAt: user.created_at
     },
     matches
@@ -728,6 +743,9 @@ app.post('/api/auth/register', (req, res) => {
   const fullName = String(req.body?.fullName || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
+  const favouriteClub = cleanText(req.body?.favouriteClub, '', 60);
+  const favouriteLeague = cleanText(req.body?.favouriteLeague, '', 40);
+  const favouriteCity = cleanText(req.body?.favouriteCity, '', 60);
 
   if (fullName.length < 2) return res.status(400).json({ error: 'Please enter your full name.' });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
@@ -736,16 +754,22 @@ app.post('/api/auth/register', (req, res) => {
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (exists) return res.status(409).json({ error: 'An account with this email already exists.' });
 
-  const userId = Number(db.prepare(
-    "INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, 'user')"
-  ).run(fullName, email, hashPassword(password)).lastInsertRowid);
+  const userId = Number(db.prepare(`
+    INSERT INTO users
+      (full_name, email, password_hash, role, favourite_club, favourite_league, favourite_city)
+    VALUES (?, ?, ?, 'user', ?, ?, ?)
+  `).run(
+    fullName, email, hashPassword(password), favouriteClub, favouriteLeague, favouriteCity
+  ).lastInsertRowid);
 
   const token = crypto.randomBytes(32).toString('hex');
   db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
 
+  const created = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
   res.status(201).json({
     token,
-    user: { id: userId, fullName, email, role: 'user' }
+    user: presentUser(created)
   });
 });
 
