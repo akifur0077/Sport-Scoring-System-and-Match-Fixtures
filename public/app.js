@@ -253,7 +253,6 @@ function render() {
         : `<div class="banner-icon">${esc(league.icon)}</div>`}
       <div>
         <div class="banner-name">${esc(league.name)}</div>
-        <div class="banner-sub">${esc(league.sub)} (20 Teams Competing)</div>
       </div>
       <div class="banner-stats">
         <div class="stat"><div class="stat-num">${esc(league.stats.matches)}</div><div class="stat-lbl">SEASON</div></div>
