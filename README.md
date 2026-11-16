@@ -7,6 +7,9 @@ create and manage their own match.
 Everything is served from a local **Node.js + Express** server with a **SQLite** database, so
 there is no external database to install and no frontend build step.
 
+For stakeholders, requirements, and the full architecture, see
+[`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md).
+
 ---
 
 ## Quick start
