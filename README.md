@@ -1,15 +1,17 @@
-# FootHub — Live Scores, Fixtures & Standings
+# ⚽ FootHub — Live Football Scores, Fixtures & Standings
 
-Interactive football center: live scores, fixtures, league tables, match lineups and user
-accounts. The frontend is a single `index.html`; all data now lives in a **SQLite** database
-behind a **Node.js + Express** REST API instead of being generated randomly in the browser.
+FootHub is a football match center for fans who want one place to follow **live scores**,
+**fixtures**, **league tables**, **lineups**, and **match events** — and for anyone who wants to
+create and manage their own match.
 
-## Requirements
+Everything is served from a local **Node.js + Express** server with a **SQLite** database, so
+there is no external database to install and no frontend build step.
 
-- Node.js **22.5 or newer** (uses the built-in `node:sqlite` module)
-- No separate database server needed — SQLite file is created automatically
+---
 
-## Run
+## Quick start
+
+**Requirements:** Node.js **22.5 or newer** (the project uses the built-in `node:sqlite` module).
 
 ```bash
 npm install
@@ -18,133 +20,211 @@ npm start
 
 Open <http://localhost:3000>.
 
-The first start creates `data/foothub.db` and seeds 7 leagues (La Liga, Premier League,
-Champions League, Bundesliga, Serie A, Ligue 1, World Cup) with 20 teams, 30 matches and
-20-row standings each, plus 15 players per squad. Every fixture gets its own kickoff date and
-time (live matches today, upcoming over the next days, finished over the previous days).
+The first start creates `data/foothub.db` and fills it with 7 leagues, teams, squads, fixtures,
+standings, and an admin account. Nothing else is required.
 
-### Scripts
+### Demo admin account
 
-| Command          | What it does                                            |
-| ---------------- | ------------------------------------------------------- |
-| `npm start`      | Start the API + website on port 3000                    |
-| `npm run dev`    | Start with `--watch` (auto restart on changes)          |
-| `npm run seed`   | Seed only if the database is empty                      |
-| `npm run reset`  | Wipe league/match data and reseed (keeps user accounts) |
+| Email              | Password   |
+| ------------------ | ---------- |
+| `admin@foothub.com` | `admin123` |
 
-Set a custom port with `PORT=4000 npm start` (PowerShell: `$env:PORT=4000; npm start`) and a
-custom database file with `DB_PATH=...`.
+> Change this password before using FootHub outside your own machine. You can override the
+> seeded credentials with `ADMIN_EMAIL` and `ADMIN_PASSWORD` (see [Configuration](#configuration)).
 
-## Roles & accounts
+---
 
-The app has two roles, stored in `users.role`:
+## What you can do
 
-| Role    | Can do                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------- |
-| `user`  | Create a match in any league, manage goals/cards in **their own** matches, browse everything |
-| `admin` | Everything a user can do, plus toggle the live simulation, manage/edit any match, view all users and delete any match |
+### Follow the action
 
-An admin account is created automatically on startup:
+- Browse **7 competitions**, each with its official logo:
+  La Liga, Premier League, Champions League, Bundesliga, Serie A, Ligue 1, and World Cup 2026.
+- Filter matches by **All**, **Live**, **Upcoming**, or **Finished**.
+- See live scores, current match time, goal scorers, venue, and kickoff date/time on every card.
+- Open any match for the full picture:
+  - match statistics (possession, shots, fouls, cards)
+  - the goal/card timeline
+  - both squads with player names and positions
+  - **Performance ratings** for live and finished matches
+- Switch to **Standings** for the full league table (P/W/D/L, goals, points, and form).
 
-- Email: `admin@foothub.com`
-- Password: `admin123`
+### Create your own match
 
-Override with `ADMIN_EMAIL` / `ADMIN_PASSWORD` environment variables (PowerShell:
-`$env:ADMIN_PASSWORD='new-secret'; npm start`). Existing accounts with that email are promoted
-to admin on startup.
+Any logged-in user can create a fixture from the current league:
 
-### Who sees what
+1. Open a league tab and choose **Create Match**.
+2. Pick the home and away teams.
+3. Choose the **match date** and **kickoff time**.
+4. Add the venue, referee, and whether the match is **Upcoming** or **Live**.
+5. Create it — your new match appears **first** in the matching Live or Upcoming list.
 
-- **Live simulation toggle** — visible only to a logged-in admin.
-- **Create Match button** — visible to any logged-in user; opens a form for the current league
-  (home/away team, match date, kickoff time, venue, referee, upcoming/live).
-- **Manage button** — shown to the owner of user-created matches and to admins on **every** match;
-  lets them set the status and record goals, yellow cards and red cards with player name and minute.
-- **Delete button** — shown only to admins, on every match (seeded official fixtures included).
-- **Admin Panel button** — visible only to a logged-in admin; shows totals and a list of every
-  registered user (name, email, role, join date, number of matches). Click **View matches** to
-  see that user's fixtures across all leagues, open one, or delete it.
-- **Delete Account button** — visible to non-admin users; asks for the password, then permanently
-  deletes the account and all matches it created. The admin account cannot be deleted.
+New fixtures are saved to the database and are visible to every visitor.
 
-Registration uses the dark two-column card design: name + email, a grouped favourite-club dropdown,
-password + confirm password, and a required terms checkbox. Passwords can be revealed with the
-eye button, and **Forgot password?** sends a 6-digit code to the registered email address.
+### Manage your matches
 
-In the match detail modal, the **Lineup** tab lists player names and positions only. A
-**Performance** tab is available for **live** and **finished** matches and shows each player's
-rating badge (green = 8.5+, yellow-green = 7.8+, grey = below) together with their stat line.
+For a match you created, the **Manage** button lets you:
 
-Official (seeded) matches have `matches.created_by = NULL`; admins may edit and delete them, while
-regular users may only manage their own matches. A match must not be `finished` while adding or
-removing events; reopen it first. Every **live** match automatically becomes **finished** 90 minutes
-after it went live (override with the `MATCH_DURATION_MS` environment variable, useful for testing).
+- set the match to **Upcoming**, **Live**, or **Finished**
+- add goals, yellow cards, and red cards with the player name and minute
+- remove events
+- see the score and timeline update immediately
 
-## Password reset email (Gmail SMTP)
+A finished match must be reopened before events can be added or removed. Scores for custom
+matches are recalculated from their goal events automatically.
 
-The **Forgot password?** link on the login form sends a 6-digit code to the registered Gmail
-address. Configure SMTP before starting the server:
+### Your account
+
+- Register with your name, email, a **favourite club** dropdown, and a password.
+- Show/hide passwords with the eye button.
+- Forgot your password? Request a **6-digit email code**, then set a new password.
+- Delete your own account by confirming your password. Your created matches are removed too.
+- The admin account cannot be deleted.
+
+### Automatic match completion
+
+Every **live** match automatically becomes **finished** after **90 minutes**. Its status changes
+to `FT` and it moves to the Finished section without any manual action.
+
+For testing, shorten the duration with the `MATCH_DURATION_MS` environment variable (for example,
+`MATCH_DURATION_MS=120000` for two minutes).
+
+---
+
+## Admin guide
+
+Log in with the admin account to unlock the admin-only tools:
+
+- **Admin Panel** — total users, admins, matches, custom matches, and events; a list of every
+  registered user with their name, email, role, join date, and match count.
+- **View matches** — see a user's created fixtures across leagues, open one, or delete it.
+- **Manage any match** — edit events and change the status of official seeded fixtures too.
+- **Delete any match** — remove a user-created or official match from the match card actions.
+- **Live simulation toggle** — turn the demo live-scoring simulation on or off. While enabled,
+  official live matches can gain simulated goals every few seconds.
+
+Regular users only see Manage on their own matches and never see admin-only controls.
+
+---
+
+## Tech stack
+
+| Layer            | Technology                              | Notes                                                        |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------ |
+| Frontend         | HTML5, CSS3, vanilla JavaScript         | Single-page UI in `index.html` + `public/app.js`; no framework or build step |
+| Fonts & icons    | Google Fonts, Font Awesome 6            | Barlow Condensed, Inter, and Font Awesome from CDNs          |
+| Backend          | Node.js ≥ 22.5, Express 4               | REST API, static file serving, auth middleware               |
+| Database         | SQLite via Node's built-in `node:sqlite` | File database at `data/foothub.db`; WAL mode and foreign keys |
+| Authentication   | `crypto.scryptSync` + per-user salt     | Passwords are never stored in plain text                     |
+| Sessions         | Random bearer tokens                    | Tokens stored in the `sessions` table and `localStorage`     |
+| Password reset   | HMAC-hashed 6-digit OTP                 | 10-minute expiry, 5 attempts, 60-second cooldown             |
+| Email            | Nodemailer                              | Optional SMTP/Gmail delivery with a local dev-code fallback  |
+| Assets           | Local PNG league logos                  | Served from `public/league-logos/`                           |
+| Tooling          | npm scripts, `node --watch`             | No bundler, transpiler, or test framework required           |
+
+### Architecture at a glance
+
+```text
+Browser (index.html + public/app.js)
+        │  fetch /api/*
+        ▼
+Express server (server/index.js)
+        │
+        ├── auth + roles + password reset
+        ├── match / league / standings API
+        ├── live simulation + 90-minute auto-finish
+        ▼
+SQLite database (data/foothub.db)
+```
+
+---
+
+## Configuration
+
+All settings are optional and can be provided as environment variables before `npm start`.
+
+| Variable               | Default                  | Purpose                                                        |
+| ---------------------- | ------------------------ | -------------------------------------------------------------- |
+| `PORT`                 | `3000`                   | HTTP port                                                      |
+| `DB_PATH`              | `data/foothub.db`        | SQLite database file location                                  |
+| `ADMIN_EMAIL`          | `admin@foothub.com`      | Email address for the seeded admin account                     |
+| `ADMIN_PASSWORD`       | `admin123`               | Password for the seeded admin account                          |
+| `MATCH_DURATION_MS`    | `5400000` (90 minutes)   | How long a live match stays live before auto-finishing         |
+| `SMTP_HOST`            | —                        | SMTP server, e.g. `smtp.gmail.com`                             |
+| `SMTP_PORT`            | `465`                    | SMTP port                                                      |
+| `SMTP_SECURE`          | `true` when port is 465  | Use TLS                                                        |
+| `SMTP_USER`            | —                        | SMTP login / sender address                                    |
+| `SMTP_PASS`            | —                        | SMTP password or Gmail app password                            |
+| `MAIL_FROM`            | `SMTP_USER`              | From address shown in reset emails                             |
+| `PASSWORD_RESET_SECRET`| random per restart       | Stable HMAC key for reset codes; set it in production          |
+
+PowerShell example:
 
 ```powershell
-$env:SMTP_HOST='smtp.gmail.com'
-$env:SMTP_PORT='465'
-$env:SMTP_SECURE='true'
-$env:SMTP_USER='your.address@gmail.com'
-$env:SMTP_PASS='your-16-char-google-app-password'
-$env:MAIL_FROM='your.address@gmail.com'   # optional, defaults to SMTP_USER
+$env:PORT = '4000'
+$env:ADMIN_PASSWORD = 'change-me'
+$env:MATCH_DURATION_MS = '120000'
 npm start
 ```
 
-Use a Google **App Password** (Google Account → Security → 2-Step Verification → App passwords),
-not your normal Gmail password. Without SMTP settings the server prints the code to the console
-and the reset screen shows it as a demo code, so the flow still works locally. Codes expire in
-10 minutes, allow 5 attempts, and a new one can be requested after 60 seconds.
+### Password reset email
+
+To send real reset codes through Gmail, use a Google **App Password**
+(Google Account → Security → 2-Step Verification → App passwords):
+
+```powershell
+$env:SMTP_HOST = 'smtp.gmail.com'
+$env:SMTP_PORT = '465'
+$env:SMTP_SECURE = 'true'
+$env:SMTP_USER = 'your.address@gmail.com'
+$env:SMTP_PASS = 'your-16-character-app-password'
+npm start
+```
+
+Without SMTP settings, the server prints the reset code to the console and the reset screen shows
+it as a demo code, so the flow still works locally.
+
+---
+
+## Scripts
+
+| Command          | What it does                                               |
+| ---------------- | ---------------------------------------------------------- |
+| `npm start`      | Start the website + API on port 3000                       |
+| `npm run dev`    | Start with `--watch` and restart automatically on changes  |
+| `npm run seed`   | Seed the database only if it is empty                      |
+| `npm run reset`  | Wipe league/match data and reseed (keeps user accounts)    |
+
+`npm run reset` is useful when you want fresh demo fixtures without losing registered users.
+
+---
 
 ## Project structure
 
+```text
+index.html               Frontend markup and styles
+public/app.js            Frontend logic and API calls
+public/league-logos/     Official league logo PNGs
+server/index.js          Express app, REST API, auth, simulation, auto-finish
+server/db.js             SQLite connection, schema bootstrap, migrations
+server/schema.sql        Tables, indexes, and constraints
+server/seed.js           Demo league/match data and admin account
+server/password.js       scrypt password hashing and verification
+server/mailer.js         Optional SMTP/Gmail OTP mailer
+server/league-logos.js   League logo path map
+data/foothub.db          Runtime SQLite database (git-ignored)
 ```
-index.html            Frontend markup + styles (loads /app.js)
-public/app.js         Frontend logic, calls the REST API
-server/schema.sql     Database schema (tables, indexes, constraints)
-server/db.js          SQLite connection, schema bootstrap and migrations
-server/password.js    scrypt password hashing / verification
-server/mailer.js      Gmail/SMTP OTP mailer (nodemailer)
-server/league-logos.js  Official league logo paths used by seed + migrations
-public/league-logos/  Official league logo PNGs served locally
-server/seed.js        Generates demo season data + ensures the admin account
-server/index.js       Express server, REST API, auth, live simulation
-data/foothub.db       SQLite database (created at runtime, git-ignored)
-```
 
-## Database schema
+---
 
-| Table          | Purpose                                                              |
-| -------------- | -------------------------------------------------------------------- |
-| `leagues`      | League metadata and season banner stats                              |
-| `teams`        | 20 teams per league with logo URLs                                   |
-| `players`      | 15-player squads (11 starters + 4 subs) per team                     |
-| `matches`      | Fixtures; `status` live/upcoming/finished, `created_by` is the owner |
-| `match_stats`  | Possession, shots, fouls (1:1 with a match)                          |
-| `match_events` | Goals and cards: `type` = `goal` / `yellow` / `red`, player, minute   |
-| `standings`    | League table rows: P/W/D/L, GF/GA, points, form                      |
-| `users`        | Accounts with `role` (`admin`/`user`), favourites and scrypt-hashed passwords |
-| `sessions`     | Bearer tokens for logged-in users                                    |
-| `password_resets` | 6-digit password reset codes (HMAC-hashed, 10-minute expiry)      |
-| `app_state`    | Persisted simulation on/off flag                                     |
-
-All child tables use `ON DELETE CASCADE` on their parent league / match / team rows.
-`server/db.js` upgrades older databases automatically (`users.role`, the favourite club/league/city
-columns, `matches.created_by` and `matches.live_started_at` are added, league logos are refreshed,
-and a legacy `goals` table is migrated into `match_events`).
-
-## API
+## For developers: API overview
 
 | Method | Endpoint                             | Auth   | Description                                      |
 | ------ | ------------------------------------ | ------ | ------------------------------------------------ |
 | GET    | `/api/health`                        | —      | Health check                                     |
-| GET    | `/api/leagues`                       | —      | List leagues + banner stats                      |
-| GET    | `/api/clubs`                         | —      | All clubs grouped for the registration dropdown |
-| GET    | `/api/leagues/:key`                  | —      | One league with teams, matches and standings     |
+| GET    | `/api/leagues`                       | —      | List leagues and banner stats                    |
+| GET    | `/api/clubs`                         | —      | All clubs, used by the registration dropdown     |
+| GET    | `/api/leagues/:key`                  | —      | One league with teams, matches, and standings    |
 | GET    | `/api/leagues/:key/matches`          | —      | Matches; optional `?status=` and `?q=`           |
 | GET    | `/api/leagues/:key/standings`        | —      | League table                                     |
 | POST   | `/api/leagues/:key/matches`          | user   | Create a match in that league                    |
@@ -152,67 +232,75 @@ and a legacy `goals` table is migrated into `match_events`).
 | POST   | `/api/matches/:id/events`            | owner  | Add `{ type, teamId, playerName, minute }`       |
 | DELETE | `/api/matches/:id/events/:eventId`   | owner  | Remove one event                                 |
 | PATCH  | `/api/matches/:id/status`            | owner  | `{ "status": "upcoming" \| "live" \| "finished" }` |
-| DELETE | `/api/matches/:id`                   | admin  | Delete any match (official or user-created)      |
-| GET    | `/api/admin/users`                   | admin  | Dashboard totals + every registered user         |
+| DELETE | `/api/matches/:id`                   | admin  | Delete any match                                 |
+| GET    | `/api/admin/users`                   | admin  | Dashboard totals and every registered user       |
 | GET    | `/api/admin/users/:id/matches`       | admin  | One user's created matches across all leagues    |
-| GET    | `/api/simulation`                    | admin  | Is the live simulator running?                   |
+| GET    | `/api/simulation`                    | admin  | Whether the live simulator is running            |
 | POST   | `/api/simulation`                    | admin  | `{ "enabled": true/false }`                      |
 | POST   | `/api/auth/register`                 | —      | `{ fullName, email, password, favouriteClub? }` → token |
 | POST   | `/api/auth/login`                    | —      | `{ email, password }` → token                    |
-| POST   | `/api/auth/forgot`                   | —      | `{ email }` → send 6-digit reset code            |
-| POST   | `/api/auth/reset`                    | —      | `{ email, otp, password }` → set new password    |
-| GET    | `/api/auth/me`                       | user   | Current user (`Authorization: Bearer <token>`)    |
+| POST   | `/api/auth/forgot`                   | —      | `{ email }` → send a 6-digit reset code          |
+| POST   | `/api/auth/reset`                    | —      | `{ email, otp, password }` → set a new password  |
+| GET    | `/api/auth/me`                       | user   | Current user (`Authorization: Bearer <token>`)   |
 | POST   | `/api/auth/logout`                   | —      | Invalidate the current token                     |
-| DELETE | `/api/auth/me`                       | user   | `{ password }` → delete own account + its matches |
+| DELETE | `/api/auth/me`                       | user   | `{ password }` → delete own account and matches  |
 
-"owner" means the user who created the match. Admins may add events, change the status and delete
-**any** match, including official seeded fixtures. Newly created fixtures are listed first within
-their status group, and each match stores the real date/time chosen in the create form.
+**Owner** means the user who created the match. Admins may act on any match, including official
+seeded fixtures.
 
-Live scores for official matches are advanced by the server every 4 seconds (1% chance per
-live match, capped at 10 goals a game) **only while the admin-controlled simulation flag is
-on**. Each goal is written to `match_events`, so score, scorer list and timeline stay in sync
-across page reloads and are shared by every visitor. Scores of custom matches are recalculated
-from their goal events whenever a goal is added or removed.
+### Database tables
 
-Independently of the simulation toggle, the server checks live matches every few seconds and moves
-them to `finished` (`FT`) once 90 minutes have passed since they went live. Set
-`MATCH_DURATION_MS` (milliseconds) before `npm start` to use a shorter duration while testing.
+| Table             | Purpose                                                              |
+| ----------------- | -------------------------------------------------------------------- |
+| `leagues`         | League metadata and banner statistics                                |
+| `teams`           | Teams with logo URLs                                                 |
+| `players`         | 15-player squads per team                                            |
+| `matches`         | Fixtures, status, scores, kickoff, and live-start timestamp          |
+| `match_stats`     | Possession, shots, fouls, and card totals per match                  |
+| `match_events`    | Goals and cards with player and minute                               |
+| `standings`       | P/W/D/L, goals, points, and form                                     |
+| `users`           | Accounts with role, favourites, and scrypt password hashes           |
+| `sessions`        | Bearer tokens for logged-in users                                    |
+| `password_resets` | HMAC-hashed 6-digit reset codes with expiry and attempt count         |
+| `app_state`       | Persisted simulation on/off flag                                     |
 
-## Notes
-
-- Passwords are hashed with `crypto.scryptSync` and a per-user salt; plain passwords are
-  never stored.
-- Sessions are random 32-byte tokens kept in the `sessions` table.
-- `data/*.db` is git-ignored. Run `npm run reset` any time to rebuild the demo data; it keeps
-  user accounts (including the admin account).
+`server/db.js` upgrades older databases automatically, including `users.role`, favourite fields,
+`matches.created_by`, and `matches.live_started_at`.
 
 ---
 
-### বাংলায় সংক্ষেপে
+## Troubleshooting
+
+| Problem                          | Fix                                                                    |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `node:sqlite` cannot be found    | Upgrade to Node.js 22.5 or newer                                       |
+| Port 3000 is already in use      | Start with a different port: `$env:PORT=4000; npm start`               |
+| Login works but data looks stale | Restart the server, then reload the page                               |
+| Reset email never arrives        | Configure SMTP/Gmail app password, or use the demo code shown locally  |
+| Need fresh demo fixtures         | Run `npm run reset` (user accounts are kept)                           |
+| Want to test auto-finish quickly | Start with `$env:MATCH_DURATION_MS='120000'; npm start`                |
+
+For production, always change the default admin password, set `PASSWORD_RESET_SECRET`, and use a
+real SMTP account.
+
+---
+
+## বাংলায় সংক্ষেপে
 
 ১. `npm install` দিন (একবারই লাগবে)।
-২. `npm start` দিয়ে সার্ভার চালু করুন, তারপর `http://localhost:3000` খুলুন।
-৩. সব ম্যাচ, পয়েন্ট টেবিল, লাইনআপ ও লগইন এখন SQLite ডেটাবেস থেকে আসে।
-৪. ডেমো ডেটা নতুন করে বানাতে `npm run reset` চালান (ইউজার অ্যাকাউন্ট মুছে যাবে না)।
-৫. অ্যাডমিন লগইন: `admin@foothub.com` / `admin123` — শুধু অ্যাডমিন লাইভ সিমুলেশন চালু/বন্ধ
-   করতে পারে এবং যেকোনো ম্যাচ (অফিসিয়ালসহ) ম্যানেজ বা ডিলিট করতে পারে।
-৬. অ্যাডমিন লগইন করলে হেডারে **Admin Panel** বাটন আসবে — সেখানে সব ইউজারের নাম, ইমেইল,
-   রোল, ম্যাচ সংখ্যা দেখা যাবে; "View matches" চেপে কার কোন ম্যাচ আছে দেখে ডিলিট করা যাবে।
-৭. লগইন করা যেকোনো ইউজার প্রতিটি লিগে (La Liga, Premier League, Champions League,
-   Bundesliga, Serie A, Ligue 1, World Cup) নিজের ম্যাচ তৈরি করতে পারে — ফর্মে ম্যাচের তারিখ ও
-   কিকঅফ সময় আলাদা করে দেওয়া যায় — এবং সেই ম্যাচে গোল, হলুদ ও লাল কার্ড (খেলোয়াড়ের নাম ও
-   মিনিটসহ) যোগ/মুছে ফেলতে পারে। নতুন তৈরি ম্যাচ Live/Upcoming তালিকার সবার আগে দেখায়।
-৮. যেকোনো ইউজার চাইলে **Delete Account** বাটনে ক্লিক করে পাসওয়ার্ড দিয়ে নিজের অ্যাকাউন্ট
-   এবং নিজের বানানো সব ম্যাচ মুছে ফেলতে পারে (অ্যাডমিন অ্যাকাউন্ট মোছা যাবে না)।
-৯. ম্যাচ ডিটেইলে **Lineup** ট্যাবে শুধু খেলোয়াড়ের নাম ও পজিশন থাকে। **Live** ও **Finished**
-   ম্যাচে অতিরিক্ত **Performance** ট্যাব আসে, যেখানে প্রতিটি খেলোয়াড়ের রেটিং ব্যাজ দেখা যায়।
-১০. পাসওয়ার্ড বক্সের পাশে চোখের আইকনে ক্লিক করলে পাসওয়ার্ড দেখা/লুকানো যায়।
-১১. পাসওয়ার্ড ভুলে গেলে **Forgot password?** → ইমেইল দিন → Gmail-এ ৬ ডিজিটের OTP যাবে →
-   OTP ও নতুন পাসওয়ার্ড দিয়ে পাসওয়ার্ড রিসেট হবে। SMTP সেট না থাকলে সার্ভার কনসোল ও
-   স্ক্রিনে ডেমো কোড দেখায়।
-১২. লিগ ট্যাব ও ব্যানারে এখন অফিসিয়াল লিগ লোগো (La Liga, Premier League, Champions League,
-   Bundesliga, Serie A, Ligue 1, World Cup) দেখায় — লোগোগুলো `public/league-logos/` এ লোকাল।
-১৩. প্রতিটি Live ম্যাচ শুরুর ৯০ মিনিট পর স্বয়ংক্রিয়ভাবে **Finished** সেকশনে চলে যাবে
-   (`MATCH_DURATION_MS` দিয়ে সময় কমিয়ে টেস্ট করা যায়)।
-১৪. রেজিস্ট্রেশনে এখন শুধু একটি ক্লাব ড্রপডাউন আছে (লিগ ও ফেভারিট সিটি ফিল্ড সরানো হয়েছে।)
+২. `npm start` দিয়ে সার্ভার চালু করুন, তারপর <http://localhost:3000> খুলুন।
+৩. উপরের লিগ ট্যাব থেকে La Liga, Premier League, Champions League, Bundesliga, Serie A,
+   Ligue 1 বা World Cup 2026 বেছে নিন।
+৪. **All / Live / Upcoming / Finished** ফিল্টার দিয়ে ম্যাচ দেখুন; ম্যাচে ক্লিক করলে স্কোর,
+   ইভেন্ট, লাইনআপ ও পারফরম্যান্স রেটিং দেখা যাবে।
+৫. অ্যাডমিন লগইন: `admin@foothub.com` / `admin123` — অ্যাডমিন যেকোনো ম্যাচ ম্যানেজ বা
+   ডিলিট করতে পারে, Admin Panel-এ সব ইউজার দেখতে পারে এবং লাইভ সিমুলেশন চালু/বন্ধ করতে পারে।
+৬. লগইন করা যেকোনো ইউজার নিজের ম্যাচ তৈরি করতে পারে — তারিখ, কিকঅফ সময়, ভেন্যু, রেফারি
+   এবং Upcoming/Live স্ট্যাটাস দিয়ে। নতুন ম্যাচ Live বা Upcoming তালিকার সবার আগে আসে।
+৭. নিজের ম্যাচে গোল, হলুদ ও লাল কার্ড (খেলোয়াড়ের নাম ও মিনিটসহ) যোগ বা মুছে ফেলা যায়।
+৮. প্রতিটি Live ম্যাচ **৯০ মিনিট** পর স্বয়ংক্রিয়ভাবে Finished হয়ে `FT` দেখায়।
+   টেস্টের জন্য `MATCH_DURATION_MS` দিয়ে সময় কমানো যায়।
+৯. রেজিস্ট্রেশনে নাম, ইমেইল, ফেভারিট ক্লাব (ড্রপডাউন) ও পাসওয়ার্ড দিতে হবে।
+১০. পাসওয়ার্ড ভুলে গেলে **Forgot password?** থেকে ৬ ডিজিটের OTP নিয়ে পাসওয়ার্ড রিসেট করুন।
+    SMTP সেট না থাকলে ডেমো কোড স্ক্রিনে ও সার্ভার কনসোলে দেখাবে।
+১১. **Delete Account** দিয়ে পাসওয়ার্ড দিয়ে নিজের অ্যাকাউন্ট ও নিজের ম্যাচগুলো মুছে ফেলা যায়।
