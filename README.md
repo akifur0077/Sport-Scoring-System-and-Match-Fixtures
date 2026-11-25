@@ -7,8 +7,12 @@ create and manage their own match.
 Everything is served from a local **Node.js + Express** server with a **SQLite** database, so
 there is no external database to install and no frontend build step.
 
-For stakeholders, requirements, and the full architecture, see
-[`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md).
+### Project documents
+
+- [`docs/SRS.md`](docs/SRS.md) — Software Requirements Specification (SRS)
+- [`docs/FootHub-SRS.docx`](docs/FootHub-SRS.docx) — SRS as a Word document
+- [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) — stakeholders, requirements and architecture
+- [`docs/FootHub-Project-Specification.docx`](docs/FootHub-Project-Specification.docx) — project specification as a Word document
 
 ---
 
