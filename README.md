@@ -80,6 +80,17 @@ For a match you created, the **Manage** button lets you:
 A finished match must be reopened before events can be added or removed. Scores for custom
 matches are recalculated from their goal events automatically.
 
+### Meet the Team
+
+Open the **Meet the Team** tab in the header to see profile cards for the people behind FootHub.
+
+- Every card can show a **profile photo**, name, role, short bio, location, email, phone, skills,
+  and LinkedIn / GitHub / Facebook / Instagram links.
+- Visitors see the profiles; admins also get **Add Member**, **Edit** and **Delete** buttons.
+- Photo upload accepts PNG, JPG, GIF or WebP up to 5 MB and stores the image in
+  `public/team-photos/`.
+- Profiles are saved in SQLite, so they remain after a server restart.
+
 ### Your account
 
 - Register with your name, email, a **favourite club** dropdown, and a password.
@@ -109,6 +120,8 @@ Log in with the admin account to unlock the admin-only tools:
 - **Delete any match** — remove a user-created or official match from the match card actions.
 - **Live simulation toggle** — turn the demo live-scoring simulation on or off. While enabled,
   official live matches can gain simulated goals every few seconds.
+- **Manage the Team** — add, edit or delete team profiles and their photos from the
+  **Meet the Team** page.
 
 Regular users only see Manage on their own matches and never see admin-only controls.
 
@@ -212,6 +225,7 @@ it as a demo code, so the flow still works locally.
 index.html               Frontend markup and styles
 public/app.js            Frontend logic and API calls
 public/league-logos/     Official league logo PNGs
+public/team-photos/      Uploaded team member photos
 server/index.js          Express app, REST API, auth, simulation, auto-finish
 server/db.js             SQLite connection, schema bootstrap, migrations
 server/schema.sql        Tables, indexes, and constraints
@@ -244,6 +258,10 @@ data/foothub.db          Runtime SQLite database (git-ignored)
 | GET    | `/api/admin/users/:id/matches`       | admin  | One user's created matches across all leagues    |
 | GET    | `/api/simulation`                    | admin  | Whether the live simulator is running            |
 | POST   | `/api/simulation`                    | admin  | `{ "enabled": true/false }`                      |
+| GET    | `/api/team`                          | —      | All Meet-the-Team profiles                       |
+| POST   | `/api/team`                          | admin  | Add a profile (optional base64 `photoData`)      |
+| PATCH  | `/api/team/:id`                      | admin  | Edit a profile or replace/remove its photo       |
+| DELETE | `/api/team/:id`                      | admin  | Delete a profile and its photo                   |
 | POST   | `/api/auth/register`                 | —      | `{ fullName, email, password, favouriteClub? }` → token |
 | POST   | `/api/auth/login`                    | —      | `{ email, password }` → token                    |
 | POST   | `/api/auth/forgot`                   | —      | `{ email }` → send a 6-digit reset code          |
@@ -270,6 +288,7 @@ seeded fixtures.
 | `sessions`        | Bearer tokens for logged-in users                                    |
 | `password_resets` | HMAC-hashed 6-digit reset codes with expiry and attempt count         |
 | `app_state`       | Persisted simulation on/off flag                                     |
+| `team_members`    | Meet-the-Team profiles, photos, contact links and skills             |
 
 `server/db.js` upgrades older databases automatically, including `users.role`, favourite fields,
 `matches.created_by`, and `matches.live_started_at`.

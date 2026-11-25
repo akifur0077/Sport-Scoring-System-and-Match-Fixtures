@@ -25,7 +25,11 @@ const state = {
   requestSeq: 0,
   manageMatch: null,
   adminData: null,
-  adminUser: null
+  adminUser: null,
+  teamMembers: [],
+  teamEditingId: null,
+  teamPhotoData: null,
+  teamRemovePhoto: false
 };
 
 /* ── helpers ─────────────────────────────────────────────────── */
@@ -96,6 +100,7 @@ async function init() {
     await restoreSession();
     await Promise.all([
       loadClubs(),
+      loadTeam(),
       loadLeague(state.leagueKey, { showLoader: false })
     ]);
 
@@ -196,7 +201,10 @@ function switchView(view) {
   state.view = view;
   document.getElementById('viewBtnMatches').classList.toggle('active', view === 'matches');
   document.getElementById('viewBtnStandings').classList.toggle('active', view === 'standings');
+  document.getElementById('viewBtnTeam').classList.toggle('active', view === 'team');
   document.getElementById('filterBar').style.display = view === 'matches' ? 'flex' : 'none';
+  document.getElementById('heroSection').style.display = view === 'team' ? 'none' : '';
+  document.getElementById('tabsWrapper').style.display = view === 'team' ? 'none' : '';
   render();
 }
 
@@ -236,6 +244,11 @@ async function toggleSimulation() {
 /* ── main render ─────────────────────────────────────────────── */
 
 function render() {
+  if (state.view === 'team') {
+    renderTeam();
+    return;
+  }
+
   const league = state.leagues[state.leagueKey];
   if (!league) return;
 
@@ -362,6 +375,267 @@ function render() {
   }
 
   document.getElementById('main-content').innerHTML = html;
+}
+
+/* ── meet the team ───────────────────────────────────────────── */
+
+async function loadTeam() {
+  try {
+    const { members } = await api('/team');
+    state.teamMembers = members || [];
+    if (state.view === 'team') renderTeam();
+  } catch (error) {
+    if (state.view === 'team') {
+      document.getElementById('main-content').innerHTML = errorBlock(error.message);
+    }
+  }
+}
+
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function socialLink(field, icon, label, value) {
+  if (!value) return '';
+  let href = '';
+  if (field === 'email') href = `mailto:${encodeURIComponent(value)}`;
+  else if (/^https?:\/\//i.test(value.trim())) href = value.trim();
+  if (!href) return '';
+  return `<a href="${esc(href)}" ${field === 'email' ? '' : 'target="_blank" rel="noopener noreferrer"'} title="${label}" aria-label="${label}"><i class="${icon}"></i></a>`;
+}
+
+function renderTeam() {
+  const members = state.teamMembers;
+  let html = `
+    <div class="team-page">
+      <div class="team-hero">
+        <div class="eyebrow"><i class="fa-solid fa-users"></i> The people behind FootHub</div>
+        <h2>Meet <span>the Team</span></h2>
+        <p>The developers, designers and match makers who build and run the FootHub football center.</p>
+      </div>
+      <div class="team-toolbar">
+        <div class="team-count"><i class="fa-solid fa-user-group"></i> ${members.length} ${members.length === 1 ? 'member' : 'members'}</div>
+        ${isAdmin() ? `<button class="team-add-btn" onclick="openTeamModal()"><i class="fa-solid fa-plus"></i> Add Member</button>` : ''}
+      </div>
+  `;
+
+  if (!members.length) {
+    html += `
+      <div class="team-empty">
+        <i class="fa-solid fa-users-rays"></i>
+        <div style="font-size:16px; font-weight:700; color:var(--text);">No team members yet</div>
+        <p style="margin:8px auto 18px; max-width:420px;">Team profiles will appear here once they are added. Admin users can add a profile with a photo, role, bio and contact links.</p>
+        ${isAdmin() ? `<button class="team-add-btn" onclick="openTeamModal()"><i class="fa-solid fa-plus"></i> Add First Member</button>` : ''}
+      </div>
+    `;
+  } else {
+    html += `<div class="team-grid">`;
+    members.forEach((member) => {
+      const photo = member.photoUrl
+        ? `<img class="member-photo" src="${esc(member.photoUrl)}" alt="${esc(member.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><div class="member-initials" style="display:none">${esc(initialsOf(member.name))}</div>`
+        : `<div class="member-initials">${esc(initialsOf(member.name))}</div>`;
+
+      const meta = [];
+      if (member.location) meta.push(`<span><i class="fa-solid fa-location-dot"></i> ${esc(member.location)}</span>`);
+      if (member.email) meta.push(`<span><i class="fa-solid fa-envelope"></i> ${esc(member.email)}</span>`);
+      if (member.phone) meta.push(`<span><i class="fa-solid fa-phone"></i> ${esc(member.phone)}</span>`);
+
+      const skills = String(member.skills || '').split(',').map((s) => s.trim()).filter(Boolean)
+        .map((s) => `<span class="skill-chip">${esc(s)}</span>`).join('');
+
+      const links = [
+        socialLink('email', 'fa-solid fa-envelope', 'Email', member.email),
+        socialLink('linkedin', 'fa-brands fa-linkedin-in', 'LinkedIn', member.linkedin),
+        socialLink('github', 'fa-brands fa-github', 'GitHub', member.github),
+        socialLink('facebook', 'fa-brands fa-facebook-f', 'Facebook', member.facebook),
+        socialLink('instagram', 'fa-brands fa-instagram', 'Instagram', member.instagram)
+      ].filter(Boolean).join('');
+
+      const actions = isAdmin() ? `
+        <div class="member-actions">
+          <button class="mini-btn accent" onclick="openTeamModal(${member.id})" title="Edit"><i class="fa-solid fa-pen"></i></button>
+          <button class="mini-btn danger" onclick="deleteTeamMember(${member.id})" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      ` : '';
+
+      html += `
+        <article class="member-card">
+          ${actions}
+          <div class="member-photo-wrap">${photo}</div>
+          <div class="member-body">
+            <div class="member-name">${esc(member.name)}</div>
+            ${member.role ? `<div class="member-role">${esc(member.role)}</div>` : ''}
+            ${member.bio ? `<div class="member-bio">${esc(member.bio)}</div>` : ''}
+            ${meta.length ? `<div class="member-meta">${meta.join('')}</div>` : ''}
+            ${skills ? `<div class="member-skills">${skills}</div>` : ''}
+            ${links ? `<div class="member-links">${links}</div>` : ''}
+          </div>
+        </article>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  document.getElementById('main-content').innerHTML = html;
+}
+
+function openTeamModal(id = null) {
+  if (!isAdmin()) return;
+
+  const member = id ? state.teamMembers.find((item) => item.id === Number(id)) : null;
+  if (id && !member) return;
+
+  state.teamEditingId = member ? member.id : null;
+  state.teamPhotoData = null;
+  state.teamRemovePhoto = false;
+
+  const value = (key) => esc(member && member[key] ? member[key] : '');
+  document.getElementById('teamModalTitle').innerHTML =
+    `<i class="fa-solid fa-${member ? 'pen' : 'user-plus'}" style="color:var(--accent-la);"></i> ${member ? 'Edit' : 'Add'} Team Member`;
+
+  document.getElementById('teamModalBody').innerHTML = `
+    <form id="teamMemberForm" onsubmit="saveTeamMember(event)">
+      <div class="form-row">
+        <div class="form-group"><label>Full name *</label><input id="teamName" maxlength="60" required value="${value('name')}" placeholder="e.g. Rahul Ahmed" /></div>
+        <div class="form-group"><label>Role / designation</label><input id="teamRole" maxlength="80" value="${value('role')}" placeholder="e.g. Frontend Developer" /></div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Short bio</label>
+        <textarea id="teamBio" rows="3" maxlength="600" placeholder="A short introduction about this member...">${value('bio')}</textarea>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Profile photo</label>
+        <input type="file" id="teamPhotoInput" accept="image/png,image/jpeg,image/gif,image/webp" onchange="handleTeamPhoto(event)" />
+        <div id="teamPhotoPreview">
+          ${member && member.photoUrl
+            ? `<img class="photo-preview" src="${esc(member.photoUrl)}" alt="Current photo" />`
+            : `<div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>`}
+        </div>
+        <div class="photo-note">
+          PNG, JPG, GIF or WebP, up to 5 MB.
+          ${member && member.photoUrl ? `<button type="button" class="mini-btn danger" onclick="removeTeamPhotoSelection()">Remove current photo</button>` : ''}
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="form-group"><label>Email</label><input id="teamEmail" type="email" maxlength="120" value="${value('email')}" placeholder="name@example.com" /></div>
+        <div class="form-group"><label>Phone</label><input id="teamPhone" maxlength="40" value="${value('phone')}" placeholder="+880 1XXX-XXXXXX" /></div>
+        <div class="form-group"><label>Location</label><input id="teamLocation" maxlength="80" value="${value('location')}" placeholder="Dhaka, Bangladesh" /></div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="form-group"><label>LinkedIn URL</label><input id="teamLinkedin" maxlength="200" value="${value('linkedin')}" placeholder="https://linkedin.com/in/..." /></div>
+        <div class="form-group"><label>GitHub URL</label><input id="teamGithub" maxlength="200" value="${value('github')}" placeholder="https://github.com/..." /></div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="form-group"><label>Facebook URL</label><input id="teamFacebook" maxlength="200" value="${value('facebook')}" placeholder="https://facebook.com/..." /></div>
+        <div class="form-group"><label>Instagram URL</label><input id="teamInstagram" maxlength="200" value="${value('instagram')}" placeholder="https://instagram.com/..." /></div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <div class="form-group"><label>Skills</label><input id="teamSkills" maxlength="200" value="${value('skills')}" placeholder="Node.js, Express, UI Design" /></div>
+        <div class="form-group" style="max-width:150px;"><label>Display order</label><input id="teamSortOrder" type="number" value="${member ? member.sortOrder : 0}" /></div>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+        <button type="button" class="auth-btn" onclick="closeTeamModal()">Cancel</button>
+        <button type="submit" class="form-submit-btn" id="teamSaveBtn"><i class="fa-solid fa-floppy-disk"></i> Save member</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById('teamModal').classList.add('open');
+}
+
+function handleTeamPhoto(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Please choose an image smaller than 5 MB.');
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.teamPhotoData = String(reader.result);
+    state.teamRemovePhoto = false;
+    document.getElementById('teamPhotoPreview').innerHTML =
+      `<img class="photo-preview" src="${state.teamPhotoData}" alt="Photo preview" />`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeTeamPhotoSelection() {
+  state.teamPhotoData = null;
+  state.teamRemovePhoto = true;
+  const input = document.getElementById('teamPhotoInput');
+  if (input) input.value = '';
+  document.getElementById('teamPhotoPreview').innerHTML =
+    `<div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>`;
+}
+
+async function saveTeamMember(event) {
+  event.preventDefault();
+
+  const payload = {
+    name: document.getElementById('teamName').value.trim(),
+    role: document.getElementById('teamRole').value.trim(),
+    bio: document.getElementById('teamBio').value.trim(),
+    email: document.getElementById('teamEmail').value.trim(),
+    phone: document.getElementById('teamPhone').value.trim(),
+    location: document.getElementById('teamLocation').value.trim(),
+    linkedin: document.getElementById('teamLinkedin').value.trim(),
+    github: document.getElementById('teamGithub').value.trim(),
+    facebook: document.getElementById('teamFacebook').value.trim(),
+    instagram: document.getElementById('teamInstagram').value.trim(),
+    skills: document.getElementById('teamSkills').value.trim(),
+    sortOrder: Number(document.getElementById('teamSortOrder').value) || 0,
+    removePhoto: state.teamRemovePhoto
+  };
+  if (state.teamPhotoData) payload.photoData = state.teamPhotoData;
+
+  if (payload.name.length < 2) {
+    alert('Please enter a name.');
+    return;
+  }
+
+  const button = document.getElementById('teamSaveBtn');
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.textContent = 'Saving…';
+
+  try {
+    const id = state.teamEditingId;
+    await api(id ? `/team/${id}` : '/team', {
+      method: id ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    await loadTeam();
+    closeTeamModal();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}
+
+async function deleteTeamMember(id) {
+  if (!confirm('Delete this team member and their photo?')) return;
+  try {
+    await api(`/team/${id}`, { method: 'DELETE' });
+    await loadTeam();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function closeTeamModal() {
+  document.getElementById('teamModal').classList.remove('open');
+}
+
+function closeTeamModalOnBackdrop(event) {
+  if (event.target === event.currentTarget) closeTeamModal();
 }
 
 /* ── match modal ─────────────────────────────────────────────── */
@@ -1443,6 +1717,8 @@ function renderAuthButtons() {
     ${deleteBtn}
     <button class="auth-btn" onclick="handleLogout()">Logout</button>
   `;
+
+  if (state.view === 'team') renderTeam();
 }
 
 function openDeleteAccount() {

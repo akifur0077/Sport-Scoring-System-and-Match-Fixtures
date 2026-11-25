@@ -132,3 +132,22 @@ CREATE TABLE IF NOT EXISTS app_state (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+/* Public "Meet the Team" profiles. Admin-managed through the Team modal. */
+CREATE TABLE IF NOT EXISTS team_members (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,
+  role         TEXT    NOT NULL DEFAULT '',
+  bio          TEXT    NOT NULL DEFAULT '',
+  photo_url    TEXT    NOT NULL DEFAULT '',
+  email        TEXT    NOT NULL DEFAULT '',
+  phone        TEXT    NOT NULL DEFAULT '',
+  location     TEXT    NOT NULL DEFAULT '',
+  linkedin     TEXT    NOT NULL DEFAULT '',
+  github       TEXT    NOT NULL DEFAULT '',
+  facebook     TEXT    NOT NULL DEFAULT '',
+  instagram    TEXT    NOT NULL DEFAULT '',
+  skills       TEXT    NOT NULL DEFAULT '',
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);

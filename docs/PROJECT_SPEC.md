@@ -30,6 +30,7 @@ There is no separate database server, frontend build pipeline, or external live-
 - Admin user overview, match management, and match deletion
 - Admin-controlled live-score simulation
 - Automatic match completion after 90 minutes
+- Admin-managed Meet the Team profiles with photo upload and contact links
 - Local persistence, seeding, and schema migrations
 - Local league logo assets
 
@@ -143,6 +144,16 @@ Functional requirements describe **what the system must do**.
 | FR-46 | The system shall upgrade older databases automatically where schema changes are required. | System |
 | FR-47 | The system shall expose a health endpoint for basic runtime checks. | Operator |
 
+### 3.6 Meet the Team
+
+| ID | Requirement | Actor |
+| --- | --- | --- |
+| FR-48 | The system shall display team member profile cards to visitors. | Visitor |
+| FR-49 | Each profile shall support a photo, name, role, bio, location, email, phone, skills and social links. | Visitor |
+| FR-50 | An admin shall be able to add, edit and delete team member profiles. | Admin |
+| FR-51 | The system shall accept PNG, JPG, GIF or WebP photos up to 5 MB and store them locally. | Admin |
+| FR-52 | Profiles shall be persisted in SQLite and ordered by a configurable display order. | System |
+
 ---
 
 ## 4. Non-functional requirements
@@ -250,6 +261,7 @@ the API.
 | `server/password.js` | scrypt hashing and verification |
 | `server/mailer.js` | SMTP transport and OTP email delivery with dev fallback |
 | `server/league-logos.js` | Maps league keys to local logo paths |
+| `public/team-photos/` | Uploaded team member profile photos |
 | `public/league-logos/` | Local PNG assets used by league tabs and banners |
 
 ### 5.3 Request lifecycle
@@ -303,6 +315,7 @@ users 1 ─── * sessions
 | `sessions` | Server-side bearer-token sessions |
 | `password_resets` | Hashed OTP codes, expiry, attempts |
 | `app_state` | Persisted application flags such as simulation on/off |
+| `team_members` | Meet-the-Team profiles, photos, contact links and skills |
 
 ### 5.5 Background processing
 

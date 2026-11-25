@@ -3,6 +3,7 @@
 require('./seed'); // creates + seeds the database the first time it runs
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const db = require('./db');
@@ -17,7 +18,10 @@ const RESET_TTL_MS = 10 * 60 * 1000;
 const RESET_COOLDOWN_MS = 60 * 1000;
 const RESET_MAX_ATTEMPTS = 5;
 
-app.use(express.json());
+const TEAM_PHOTO_DIR = path.join(__dirname, '..', 'public', 'team-photos');
+fs.mkdirSync(TEAM_PHOTO_DIR, { recursive: true });
+
+app.use(express.json({ limit: '8mb' }));
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
@@ -803,6 +807,150 @@ app.post('/api/simulation', requireAdmin, (req, res) => {
   const enabled = Boolean(req.body && req.body.enabled);
   setSimulation(enabled);
   res.json({ enabled });
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Meet the Team
+   ══════════════════════════════════════════════════════════════════ */
+
+const TEAM_PHOTO_RE = /^data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/=\s]+)$/i;
+
+function storeTeamPhoto(dataUrl) {
+  const match = TEAM_PHOTO_RE.exec(String(dataUrl || ''));
+  if (!match) return { error: 'Please choose a PNG, JPG, GIF or WebP image.' };
+
+  const bytes = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+  if (!bytes.length) return { error: 'That image is empty.' };
+  if (bytes.length > 5 * 1024 * 1024) return { error: 'Photo must be smaller than 5 MB.' };
+
+  const type = match[1].toLowerCase();
+  const extension = type === 'jpeg' ? 'jpg' : type;
+  const filename = `${crypto.randomUUID()}.${extension}`;
+  fs.writeFileSync(path.join(TEAM_PHOTO_DIR, filename), bytes);
+  return { url: `/team-photos/${filename}` };
+}
+
+function removeTeamPhoto(photoUrl) {
+  if (!photoUrl || !photoUrl.startsWith('/team-photos/')) return;
+  const filename = path.basename(photoUrl);
+  if (!/^[a-f0-9-]+\.(png|jpe?g|gif|webp)$/i.test(filename)) return;
+  try {
+    fs.unlinkSync(path.join(TEAM_PHOTO_DIR, filename));
+  } catch {
+    /* already gone — nothing to do */
+  }
+}
+
+function presentMember(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role || '',
+    bio: row.bio || '',
+    photoUrl: row.photo_url || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    location: row.location || '',
+    linkedin: row.linkedin || '',
+    github: row.github || '',
+    facebook: row.facebook || '',
+    instagram: row.instagram || '',
+    skills: row.skills || '',
+    sortOrder: row.sort_order,
+    createdAt: row.created_at
+  };
+}
+
+function teamFields(body) {
+  return {
+    name: cleanText(body?.name, '', 60),
+    role: cleanText(body?.role, '', 80),
+    bio: cleanText(body?.bio, '', 600),
+    email: cleanText(body?.email, '', 120),
+    phone: cleanText(body?.phone, '', 40),
+    location: cleanText(body?.location, '', 80),
+    linkedin: cleanText(body?.linkedin, '', 200),
+    github: cleanText(body?.github, '', 200),
+    facebook: cleanText(body?.facebook, '', 200),
+    instagram: cleanText(body?.instagram, '', 200),
+    skills: cleanText(body?.skills, '', 200),
+    sortOrder: Number.parseInt(body?.sortOrder, 10) || 0
+  };
+}
+
+const TEAM_INSERT = `
+  INSERT INTO team_members
+    (name, role, bio, photo_url, email, phone, location, linkedin, github, facebook, instagram, skills, sort_order)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+const TEAM_UPDATE = `
+  UPDATE team_members
+  SET name = ?, role = ?, bio = ?, photo_url = ?, email = ?, phone = ?, location = ?,
+      linkedin = ?, github = ?, facebook = ?, instagram = ?, skills = ?, sort_order = ?
+  WHERE id = ?
+`;
+
+function teamValues(fields, photoUrl) {
+  return [
+    fields.name, fields.role, fields.bio, photoUrl, fields.email, fields.phone,
+    fields.location, fields.linkedin, fields.github, fields.facebook, fields.instagram,
+    fields.skills, fields.sortOrder
+  ];
+}
+
+app.get('/api/team', (req, res) => {
+  const members = db.prepare('SELECT * FROM team_members ORDER BY sort_order, id').all().map(presentMember);
+  res.json({ members });
+});
+
+app.post('/api/team', requireAdmin, (req, res) => {
+  const fields = teamFields(req.body);
+  if (fields.name.length < 2) return res.status(400).json({ error: 'Please enter a name.' });
+
+  let photoUrl = '';
+  if (req.body?.photoData) {
+    const stored = storeTeamPhoto(req.body.photoData);
+    if (stored.error) return res.status(400).json({ error: stored.error });
+    photoUrl = stored.url;
+  }
+
+  const id = Number(db.prepare(TEAM_INSERT).run(...teamValues(fields, photoUrl)).lastInsertRowid);
+  const member = db.prepare('SELECT * FROM team_members WHERE id = ?').get(id);
+  res.status(201).json({ member: presentMember(member) });
+});
+
+app.patch('/api/team/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM team_members WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Team member not found.' });
+
+  const fields = teamFields(req.body);
+  if (fields.name.length < 2) return res.status(400).json({ error: 'Please enter a name.' });
+
+  let photoUrl = existing.photo_url || '';
+  if (req.body?.photoData) {
+    const stored = storeTeamPhoto(req.body.photoData);
+    if (stored.error) return res.status(400).json({ error: stored.error });
+    removeTeamPhoto(photoUrl);
+    photoUrl = stored.url;
+  } else if (req.body?.removePhoto) {
+    removeTeamPhoto(photoUrl);
+    photoUrl = '';
+  }
+
+  db.prepare(TEAM_UPDATE).run(...teamValues(fields, photoUrl), id);
+  const member = db.prepare('SELECT * FROM team_members WHERE id = ?').get(id);
+  res.json({ member: presentMember(member) });
+});
+
+app.delete('/api/team/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM team_members WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Team member not found.' });
+
+  db.prepare('DELETE FROM team_members WHERE id = ?').run(id);
+  removeTeamPhoto(existing.photo_url);
+  res.json({ ok: true });
 });
 
 /* ══════════════════════════════════════════════════════════════════

@@ -47,6 +47,7 @@ The system is delivered as one Node.js process containing a static frontend, an 
 - Goal and card event management with automatic score recalculation
 - Administrative dashboard, user overview, global match management and deletion
 - Admin-controlled live-score simulation and automatic 90-minute match completion
+- Admin-managed Meet the Team profiles with photo upload and contact links
 - Local persistence, first-run seeding and automatic schema migration
 
 **Out of scope**
@@ -76,9 +77,9 @@ The system is delivered as one Node.js process containing a static frontend, an 
 | User | Registered account holder with permission to create and manage own matches |
 | Admin | Privileged account holder with global management access |
 | Owner | The user who created a particular custom match |
-| FR | Functional requirement, identified as FR-01 to FR-47 |
+| FR | Functional requirement, identified as FR-01 to FR-52 |
 | NFR | Non-functional requirement, identified as NFR-01 to NFR-27 |
-| UC | Use case, identified as UC-01 to UC-08 |
+| UC | Use case, identified as UC-01 to UC-09 |
 | OTP | One-time password, a six-digit password-reset code |
 | SRS | Software Requirements Specification |
 | REST API | HTTP JSON interface exposed under the /api path |
@@ -118,6 +119,7 @@ The system provides the following high-level functions:
 - F6 — administer users, matches and the live simulation
 - F7 — run a live simulation and finish live matches automatically after 90 minutes
 - F8 — persist, seed, migrate and reset application data
+- F9 — publish and manage team member profiles with photos
 
 ### 2.3 User classes and characteristics
 
@@ -152,6 +154,7 @@ The system provides the following high-level functions:
 - Newly created matches must appear first inside their Live or Upcoming group.
 - Registration must use a favourite-club dropdown and must not include a league select or favourite-city field.
 - Match completion must not depend on the live simulation toggle.
+- Team member photos must be stored locally under public/team-photos and uploaded images must be validated by type and size.
 
 ### 2.6 Assumptions and dependencies
 
@@ -206,6 +209,7 @@ FootHub uses a client-server, three-tier architecture implemented as a modular m
 | server/password.js | scrypt password hashing and verification |
 | server/mailer.js | SMTP/Gmail OTP delivery with local fallback |
 | server/league-logos.js | Mapping from league keys to local logo paths |
+| public/team-photos | Uploaded team member profile photos |
 
 ### 3.4 Request flow
 
@@ -229,6 +233,7 @@ FootHub uses a client-server, three-tier architecture implemented as a modular m
 - Manage Match dialog for status changes and goal or card events.
 - Auth dialogs for register, login, forgot password, reset password and delete account.
 - Admin panel with dashboard totals, user list, per-user matches and simulation toggle.
+- Meet the Team tab with profile cards; admins get Add Member, Edit and Delete controls.
 - Clear confirmation prompts for destructive actions such as deleting a match, event or account.
 - Registration form uses a grouped favourite-club dropdown; league selection and favourite-city fields are absent.
 - Font Awesome icons and Google Fonts are loaded from CDNs; the application still runs without a build step.
@@ -332,6 +337,16 @@ Each requirement has a stable identifier so it can be traced to design, implemen
 | FR-45 | Seed demo leagues, teams, players, matches, standings and admin account on first run | High | System |
 | FR-46 | Upgrade older databases automatically when the schema changes | Medium | System |
 | FR-47 | Expose a health endpoint for runtime checks | Low | Operator |
+
+### 5.6 Meet the Team (FR-48 to FR-52)
+
+| ID | Requirement | Priority | Actor |
+| --- | --- | --- | --- |
+| FR-48 | Display all team member profiles to public visitors in a card grid | Medium | Visitor |
+| FR-49 | Show photo, name, role, bio, location, email, phone, skills and social links on each card | Medium | Visitor |
+| FR-50 | Allow an admin to add, edit and delete team member profiles | High | Admin |
+| FR-51 | Accept PNG, JPG, GIF or WebP profile photos up to 5 MB and store them locally | Medium | Admin |
+| FR-52 | Persist profiles in SQLite and order them by the configured display order | Medium | System |
 
 ---
 
@@ -439,6 +454,7 @@ users 1 --- * sessions
 | sessions | Bearer tokens for logged-in users |
 | password_resets | Hashed reset codes, expiry and attempts |
 | app_state | Persisted flags such as simulation on or off |
+| team_members | Meet the Team profiles, photos, contact links and skills |
 
 ### 7.3 Data integrity rules
 
@@ -475,6 +491,10 @@ All endpoints return JSON. Authentication uses Authorization: Bearer token. Owne
 | GET | /api/admin/users/:id/matches | Admin | One user's matches across leagues |
 | GET | /api/simulation | Admin | Read simulation state |
 | POST | /api/simulation | Admin | Enable or disable simulation |
+| GET | /api/team | Public | List all team member profiles |
+| POST | /api/team | Admin | Add a profile with an optional base64 photo |
+| PATCH | /api/team/:id | Admin | Edit a profile or replace/remove its photo |
+| DELETE | /api/team/:id | Admin | Delete a profile and its photo |
 | POST | /api/auth/register | Public | Register and receive a token |
 | POST | /api/auth/login | Public | Log in and receive a token |
 | POST | /api/auth/forgot | Public | Request a six-digit reset code |
@@ -534,6 +554,10 @@ All endpoints return JSON. Authentication uses Authorization: Bearer token. Owne
 
 **Actor:** System. **Precondition:** A live match has a recorded live-start time. **Main flow:** the scheduler checks elapsed time; after the configured default of 90 minutes it sets status to finished and displays FT. **Postcondition:** The match moves to the Finished group even if simulation is off.
 
+### 10.9 UC-09 Add a team member
+
+**Actor:** Admin. **Precondition:** The admin is logged in. **Main flow:** open the Meet the Team tab, choose Add Member, enter name, role, bio, contact details, skills and display order, optionally upload a photo, then save. **Alternate flow:** an unsupported image type or an image over 5 MB is rejected with an error. **Postcondition:** The profile card and photo (if provided) appear immediately for all visitors.
+
 ---
 
 ## 11. Acceptance criteria
@@ -548,6 +572,7 @@ All endpoints return JSON. Authentication uses Authorization: Bearer token. Owne
 | Automation | Live matches finish after the configured duration independently of simulation; simulation toggle is admin-only |
 | Security | Passwords and OTPs are hashed; tokens are revocable; ownership and role checks reject unauthorized requests |
 | Persistence | Data survives restart; npm run reset restores demo fixtures while keeping user accounts |
+| Team profiles | Visitors see profile cards; admins can add, edit and delete members; photos upload, display and are removed with the profile |
 | Setup | npm install and npm start bring up the application on port 3000 with seeded data |
 
 ---
@@ -591,6 +616,7 @@ All endpoints return JSON. Authentication uses Authorization: Bearer token. Owne
 | Create and manage matches | FR-22 to FR-32 | NFR-05, NFR-07, NFR-11, NFR-16 |
 | Administration and moderation | FR-33 to FR-39 | NFR-12, NFR-23, NFR-24 |
 | Automation and persistence | FR-40 to FR-47 | NFR-03, NFR-04, NFR-06, NFR-20 |
+| Team profiles | FR-48 to FR-52 | NFR-06, NFR-12, NFR-14, NFR-27 |
 | Developer and operator experience | FR-23, FR-32, FR-42, FR-47 | NFR-18, NFR-19, NFR-21, NFR-26, NFR-27 |
 
 See README.md for setup instructions and docs/PROJECT_SPEC.md for the broader project specification.
