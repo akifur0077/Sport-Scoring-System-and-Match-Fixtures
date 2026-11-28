@@ -5,7 +5,10 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const LEAGUE_LOGOS = require('./league-logos');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'foothub.db');
+const DB_PATH = process.env.DB_PATH
+  || (process.env.DATA_DIR
+    ? path.join(process.env.DATA_DIR, 'foothub.db')
+    : path.join(__dirname, '..', 'data', 'foothub.db'));
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });

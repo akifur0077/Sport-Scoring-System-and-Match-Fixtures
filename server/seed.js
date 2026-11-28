@@ -452,3 +452,91 @@ function ensureAdmin() {
 
 ensureAdmin();
 
+/* ── Meet the Team demo profiles ──────────────────────────────── */
+
+function ensureTeamMembers() {
+  const existing = db.prepare('SELECT COUNT(*) AS count FROM team_members').get();
+  if (existing.count > 0) return;
+
+  const members = [
+    {
+      name: 'MD. Akifur Rahman',
+      role: 'Backend Developer',
+      bio: '',
+      photoUrl: '/team-photos/29de6869-338a-4bb7-b2e2-19d1483973a8.jpg',
+      email: 'heroifaz200@gmail.com',
+      phone: '01910428028',
+      location: 'Chittagong, Bangladesh',
+      linkedin: 'https://www.linkedin.com/in/akif-rishad-a6004031a/',
+      github: 'https://github.com/akifur0077',
+      facebook: 'https://www.facebook.com/Akif.rishad.8.6.2003',
+      instagram: 'https://www.instagram.com/aint_rishad/',
+      skills: 'HTML, CSS, JavaScript, Node.js, Express, SQLite',
+      sortOrder: 1
+    },
+    {
+      name: 'Sheikh Mohammad Imran',
+      role: 'Frontend Developer',
+      bio: '',
+      photoUrl: '/team-photos/ca1a561b-5974-4f85-b1a9-a2c414957d5f.jpg',
+      email: 'sheikhmohammodimran@gmail.com',
+      phone: '01410753763',
+      location: 'Chittagong, Bangladesh',
+      linkedin: 'https://www.linkedin.com/in/sheikh-mohammod-imran-9ba309426/',
+      github: 'https://github.com/sheikhmohammodimran',
+      facebook: 'https://www.facebook.com/share/1H5aG73VEx/',
+      instagram: '',
+      skills: 'HTML, CSS',
+      sortOrder: 2
+    },
+    {
+      name: 'Tasnimul Karim',
+      role: 'Frontend Developer',
+      bio: '',
+      photoUrl: '/team-photos/748e83ec-7599-4877-bba9-f4f1b6e6644c.jpg',
+      email: '',
+      phone: '',
+      location: 'Chittagong, Bangladesh',
+      linkedin: 'https://www.linkedin.com/in/tasnimul-kabir-513739452/',
+      github: 'https://github.com/tasnimulkabir',
+      facebook: '',
+      instagram: '',
+      skills: 'HTML, CSS, PHP',
+      sortOrder: 3
+    },
+    {
+      name: 'Piyal Hasan',
+      role: 'Backend Developer',
+      bio: '',
+      photoUrl: '/team-photos/6b066128-9710-4d37-994d-3462d093bf58.jpg',
+      email: 'piyalhasan36041@gmail.com',
+      phone: '01735200579',
+      location: 'Chittagong, Bangladesh',
+      linkedin: 'https://www.linkedin.com/in/piyal-hasan-a4288a349/',
+      github: 'https://github.com/piyal3604',
+      facebook: 'https://www.facebook.com/share/1CLW7w6fXb/',
+      instagram: 'https://www.instagram.com/piyal.404m/',
+      skills: 'HTML, CSS, JavaScript, Node.js, Express, SQLite',
+      sortOrder: 4
+    }
+  ];
+
+  const insert = db.prepare(`
+    INSERT INTO team_members
+      (name, role, bio, photo_url, email, phone, location, linkedin, github, facebook, instagram, skills, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const member of members) {
+    insert.run(
+      member.name, member.role, member.bio, member.photoUrl, member.email, member.phone,
+      member.location, member.linkedin, member.github, member.facebook, member.instagram,
+      member.skills, member.sortOrder
+    );
+  }
+
+  console.log(`Seeded ${members.length} team member profiles.`);
+}
+
+ensureTeamMembers();
+
